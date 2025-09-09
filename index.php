@@ -58,7 +58,8 @@ if (!empty($_SESSION['cookie_profile']) && is_array($_SESSION['cookie_profile'])
 </head>
 <body>
   <div id="top-bar">
-    <span class="lei-display">Lei: <span id="lei-count">0</span></span>
+    <span id="day-display">Ziua: <span id="day-num">1</span></span>
+    <span class="lei-display" style="margin-left:auto">Lei: <span id="lei-count">0</span></span>
   </div>
   <main id="cookie-game"></main>
   <noscript>
@@ -66,4 +67,3 @@ if (!empty($_SESSION['cookie_profile']) && is_array($_SESSION['cookie_profile'])
   </noscript>
 </body>
 </html>
-

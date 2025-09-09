@@ -1,234 +1,112 @@
 (()=>{
-  // Merge helpers
+  // Utilities
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const deepClone=o=>JSON.parse(JSON.stringify(o||{}));
-  const mergeStates=(a,b)=>{const base=deepClone(a||{});const aLei=a&&a.lei||0,bLei=b&&b.lei||0;base.lei=Math.max(aLei,bLei);const aDay=a?.progress?.cookies?.day??1,bDay=b?.progress?.cookies?.day??1;const aBest=a?.progress?.cookies?.profitBest??0,bBest=b?.progress?.cookies?.profitBest??0;base.progress=base.progress||{};base.progress.cookies=base.progress.cookies||{};base.progress.cookies.day=Math.max(aDay,bDay);base.progress.cookies.profitBest=Math.max(aBest,bBest);base.meta={...(a?.meta||{}),...(b?.meta||{})};return {...a,...b,...base};};
+  const fmt=n=>(Math.round(n*100)/100).toFixed(2);
 
-  // Load/save state: localStorage + cookie + session
+  // Persistence
   function loadState(){
-    let local=null; try{local=JSON.parse(localStorage.getItem('cookie_profile')||'null')}catch(e){}
+    let local=null; try{ local=JSON.parse(localStorage.getItem('bakery_state')||'null'); }catch(e){}
     const server=window.__SERVER_STATE__||null;
-    const def={lei:0, progress:{cookies:{day:1, profitBest:0}}, meta:{introSeen:false}};
-    if(server && local) return mergeStates(server, local);
-    if(server) return mergeStates(def, server);
-    if(local) return mergeStates(def, local);
-    return def;
+    const def={
+      version:1, day:1, cash:(server&&typeof server.lei==='number')?server.lei:200, reputation:1.00,
+      economyIndex:1.00, seasonality:1.00,
+      marketing:{flyerDaysLeft:0,socialDaysLeft:0}, upgrades:{ovenPlus:false,posRapid:false,timerAuto:false},
+      loan:{principal:0,dailyRate:0.007}, fixedCostsPerDay:150, holdCostPerUnitPerDay:0.10,
+      products:{ croissant:{ name:'Croissant', key:'croissant', P0:10, price:10, happyHour:{start:'16:00',end:'17:00',discount:0.10,enabled:false}, cost:{ingredients:3,laborVar:0.5}, shelfLifeDays:2, plannedQty:100, stock:[], _ing:0 } },
+      capacity:{ prepPerDay:100, ovenBatchSize:50, ovenBatchesPerDay:2, decorPerDay:120, cashierMu:1.5 },
+      staff:{ prep:1, oven:1, decor:1, cashier:1, total:4 }, today:null
+    };
+    const base = local ? Object.assign(def, local) : def;
+    const serverLei = server && typeof server.lei==='number' ? server.lei : 0; if (serverLei > (base.cash||0)) base.cash = serverLei;
+    return base;
   }
-  function saveState(s){
-    try{ localStorage.setItem('cookie_profile', JSON.stringify(s)); }catch(e){}
-    try{ document.cookie='cookie_profile='+encodeURIComponent(JSON.stringify(s))+'; path=/; max-age=31536000; samesite=Lax'; }catch(e){}
-    try{
-      if(navigator.sendBeacon){ const blob=new Blob([JSON.stringify(s)],{type:'application/json'}); navigator.sendBeacon('?action=save', blob); }
-      else { fetch('?action=save',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(s)}); }
-    }catch(e){}
-  }
+  function saveState(s){ try{ localStorage.setItem('bakery_state', JSON.stringify(s)); }catch(e){} try{ const mirror={lei:s.cash||0,progress:{cookies:{day:s.day,profitBest:0}}}; localStorage.setItem('cookie_profile', JSON.stringify(mirror)); }catch(e){} try{ document.cookie='cookie_profile='+encodeURIComponent(JSON.stringify({lei:s.cash||0}))+'; path=/; max-age=31536000; samesite=Lax'; }catch(e){} try{ const payload={lei:s.cash||0,progress:{cookies:{day:s.day,profitBest:0}}}; if(navigator.sendBeacon){ const b=new Blob([JSON.stringify(payload)],{type:'application/json'}); navigator.sendBeacon('?action=save', b);} else { fetch('?action=save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } }catch(e){} }
 
-  let state=loadState();
-  const updateLeiDisplay=()=>{ const el=document.getElementById('lei-count'); if(el) el.textContent=String(state.lei); };
-  const addLei=(amount)=>{ state.lei+=amount; updateLeiDisplay(); saveState(state); celebrateBanisor(); };
-  const updateCookieProgress=(data)=>{ const prog=state.progress.cookies||{}; state.progress.cookies={...prog, ...data}; saveState(state); };
+  let state = loadState();
+  const topDay=()=>{ const d=document.getElementById('day-num'); if(d) d.textContent=String(state.day); };
+  const topCash=()=>{ const c=document.getElementById('lei-count'); if(c) c.textContent=String(Math.round(state.cash)); };
 
-  // Data
-  const DECORATIONS={ 'ciocolată':{piece:'chocolate_chips.png', final:'cookie_choco.png'}, 'fructe':{piece:'strawberries.png', final:'cookie_strawberry.png'}, 'bombonele':{piece:'sprinkles.png', final:'cookie_sprinkle.png'} };
-  const ORDERS=[ {decoration:'ciocolată'}, {decoration:'fructe'}, {decoration:'bombonele'} ];
-  const CLIENTS=[ {emoji:'🧒', name:'Maria'}, {emoji:'🧑', name:'Ion'}, {emoji:'🐻', name:'Ursuleț'}, {emoji:'🦊', name:'Vulpița'} ];
-  let currentOrder=null, currentClient=null; let currentExtras={cacao:false, cocos:false};
+  const ECON={ F_base:120, C0:0.50, epsilon:1.6, alpha:0.75, beta:0.50, kappa:0.60, delta:0.10, rho:0.75, Wmax:6, tau:3, gammaSalvage:0.20 };
+  function clearRoot(){ const r=document.getElementById('cookie-game'); r.innerHTML=''; document.querySelectorAll('.station-bar').forEach(e=>e.remove()); }
+  function stationBar(title){ const bar=document.createElement('div'); bar.className='station-bar'; ['Plan','Producție','Servire','Raport'].forEach(name=>{ const d=document.createElement('div'); d.className='station'; d.textContent=name; if(name===title) d.classList.add('active'); bar.appendChild(d); }); document.body.appendChild(bar); }
+  function buildBanisorSprite(sizePx=120){ const wrap=document.createElement('div'); wrap.className='banisor-sprite'; wrap.style.width=sizePx+'px'; wrap.style.height=sizePx+'px'; wrap.innerHTML=`<svg viewBox="0 0 200 200" aria-label="Banisor animat" role="img"><ellipse cx="100" cy="185" rx="45" ry="10" fill="#d3b37a" opacity=".35"/><g fill="#f0a82a" stroke="#c67a12" stroke-width="4"><path d="M75 160 q-8 12 8 18 h18 q10-2 6-10 q-6-14-32-8z"/><path d="M127 160 q8 12-8 18 h-18 q-10-2-6-10 q6-14 32-8z"/></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6" class="hand-wave"><path d="M150 110 q25 5 25 25" fill="none"/><circle cx="175" cy="135" r="14" /><circle cx="165" cy="128" r="6" /><circle cx="184" cy="142" r="6" /></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6"><path d="M50 110 q-25 5 -25 25" fill="none"/><circle cx="25" cy="135" r="14" /><circle cx="35" cy="128" r="6" /><circle cx="16" cy="142" r="6" /></g><defs><radialGradient id="g1" cx="35%" cy="35%"><stop offset="0%"  stop-color="#ffe58a"/><stop offset="60%" stop-color="#ffd053"/><stop offset="100%" stop-color="#f2a62b"/></radialGradient></defs><circle cx="100" cy="100" r="68" fill="url(#g1)" stroke="#c67a12" stroke-width="8"/><circle cx="100" cy="100" r="56" fill="none" stroke="#ffde82" stroke-width="10" opacity=".9"/><g stroke="#c67a12" stroke-width="4" opacity=".6"><line x1="155" y1="60"  x2="165" y2="62"/><line x1="160" y1="75"  x2="170" y2="78"/><line x1="164" y1="92"  x2="175" y2="95"/><line x1="165" y1="110" x2="176" y2="112"/><line x1="160" y1="128" x2="170" y2="130"/></g><circle cx="75" cy="112" r="9" fill="#f2a035" opacity=".8"/><circle cx="125" cy="112" r="9" fill="#f2a035" opacity=".8"/><g class="eye"><circle cx="80" cy="95" r="14" fill="#fff"/><circle cx="80" cy="98" r="7" fill="#2a2a2a"/><circle cx="76" cy="92" r="3.5" fill="#fff"/></g><g class="eye"><circle cx="120" cy="95" r="14" fill="#fff"/><circle cx="120" cy="98" r="7" fill="#2a2a2a"/><circle cx="116" cy="92" r="3.5" fill="#fff"/></g><path d="M68 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/><path d="M108 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/><circle cx="100" cy="108" r="6" fill="#ffcf59" stroke="#c67a12" stroke-width="2"/><path d="M85 120 q15 18 30 0 q-7 18-30 0z" fill="#d3542f" stroke="#a63b1c" stroke-width="3"/><path d="M96 132 q7 6 14 0" fill="none" stroke="#e97b57" stroke-width="3" stroke-linecap="round"/><g class="hat"><ellipse cx="100" cy="52" rx="46" ry="12" fill="#1e8da1" stroke="#0f5e6b" stroke-width="5"/><path d="M65 45 q35-25 70 0 v22 h-70z" fill="#1da0b4" stroke="#0f5e6b" stroke-width="5" /><path d="M60 55 q40-18 80 0" fill="none" stroke="#147a8a" stroke-width="5" stroke-linecap="round"/></g></svg>`; wrap.addEventListener('click',()=>{ wrap.classList.remove('spin-once'); void wrap.offsetWidth; wrap.classList.add('spin-once'); }); return wrap; }
+  const createBanisor=text=>{ const c=document.createElement('div'); c.className='banisor'; c.appendChild(buildBanisorSprite(120)); const p=document.createElement('p'); p.textContent=text; c.appendChild(p); return c; };
 
-  // Station bar
-  const renderStationBar=(active)=>{ document.querySelectorAll('.station-bar').forEach(el=>el.remove()); const bar=document.createElement('div'); bar.className='station-bar'; ['Mixare','Coacere','Decorare'].forEach(name=>{ const div=document.createElement('div'); div.className='station'; div.textContent=name; if(name===active) div.classList.add('active'); bar.appendChild(div); }); document.body.appendChild(bar); };
+  // Inventory helpers
+  function addInventory(prodKey, qty, q){ if(qty<=0) return; const p=state.products[prodKey]; p.stock.push({ qty: Math.round(qty), q: clamp(q,0,1), age: 0 }); }
+  function consumeInventory(prodKey, qty){ const p=state.products[prodKey]; let left=qty, sold=0, qWeighted=0; for(const lot of p.stock){ if(left<=0) break; const take=Math.min(lot.qty, left); lot.qty-=take; left-=take; sold+=take; qWeighted += take * lot.q; } p.stock = p.stock.filter(l=>l.qty>0); const qAvg = sold>0 ? qWeighted/sold : 0; return { sold, qAvg }; }
+  const totalStock=prodKey=>(state.products[prodKey].stock||[]).reduce((s,l)=>s+l.qty,0);
+  function avgQuality(prodKey){ const p=state.products[prodKey]; let sum=0, cnt=0; p.stock.forEach(l=>{ sum+=l.qty*l.q; cnt+=l.qty; }); return cnt>0 ? sum/cnt : 0.85; }
+  function ageAndExpire(){ const L=state.products.croissant.shelfLifeDays; const expired={}; for(const k of Object.keys(state.products)){ const p=state.products[k]; p.stock.forEach(l=>l.age++); const expLots=[], keep=[]; p.stock.forEach(l=>{ if(l.age>=L) expLots.push(l); else keep.push(l); }); p.stock=keep; expired[k]=expLots; } return expired; }
 
-  // Banisor SVG
-  function buildBanisorSprite(sizePx=120){ const wrap=document.createElement('div'); wrap.className='banisor-sprite'; wrap.style.width=sizePx+'px'; wrap.style.height=sizePx+'px'; wrap.innerHTML=`
-    <svg viewBox="0 0 200 200" aria-label="Banisor animat" role="img">
-      <ellipse cx="100" cy="185" rx="45" ry="10" fill="#d3b37a" opacity=".35"/>
-      <g fill="#f0a82a" stroke="#c67a12" stroke-width="4">
-        <path d="M75 160 q-8 12 8 18 h18 q10-2 6-10 q-6-14-32-8z"/>
-        <path d="M127 160 q8 12-8 18 h-18 q-10-2-6-10 q6-14 32-8z"/>
-      </g>
-      <g fill="#f0a82a" stroke="#c67a12" stroke-width="6" class="hand-wave">
-        <path d="M150 110 q25 5 25 25" fill="none"/>
-        <circle cx="175" cy="135" r="14" />
-        <circle cx="165" cy="128" r="6" />
-        <circle cx="184" cy="142" r="6" />
-      </g>
-      <g fill="#f0a82a" stroke="#c67a12" stroke-width="6">
-        <path d="M50 110 q-25 5 -25 25" fill="none"/>
-        <circle cx="25" cy="135" r="14" />
-        <circle cx="35" cy="128" r="6" />
-        <circle cx="16" cy="142" r="6" />
-      </g>
-      <defs>
-        <radialGradient id="g1" cx="35%" cy="35%">
-          <stop offset="0%"  stop-color="#ffe58a"/>
-          <stop offset="60%" stop-color="#ffd053"/>
-          <stop offset="100%" stop-color="#f2a62b"/>
-        </radialGradient>
-      </defs>
-      <circle cx="100" cy="100" r="68" fill="url(#g1)" stroke="#c67a12" stroke-width="8"/>
-      <circle cx="100" cy="100" r="56" fill="none" stroke="#ffde82" stroke-width="10" opacity=".9"/>
-      <g stroke="#c67a12" stroke-width="4" opacity=".6">
-        <line x1="155" y1="60"  x2="165" y2="62"/>
-        <line x1="160" y1="75"  x2="170" y2="78"/>
-        <line x1="164" y1="92"  x2="175" y2="95"/>
-        <line x1="165" y1="110" x2="176" y2="112"/>
-        <line x1="160" y1="128" x2="170" y2="130"/>
-      </g>
-      <circle cx="75" cy="112" r="9" fill="#f2a035" opacity=".8"/>
-      <circle cx="125" cy="112" r="9" fill="#f2a035" opacity=".8"/>
-      <g class="eye"><circle cx="80" cy="95" r="14" fill="#fff"/><circle cx="80" cy="98" r="7" fill="#2a2a2a"/><circle cx="76" cy="92" r="3.5" fill="#fff"/></g>
-      <g class="eye"><circle cx="120" cy="95" r="14" fill="#fff"/><circle cx="120" cy="98" r="7" fill="#2a2a2a"/><circle cx="116" cy="92" r="3.5" fill="#fff"/></g>
-      <path d="M68 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/>
-      <path d="M108 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="100" cy="108" r="6" fill="#ffcf59" stroke="#c67a12" stroke-width="2"/>
-      <path d="M85 120 q15 18 30 0 q-7 18-30 0z" fill="#d3542f" stroke="#a63b1c" stroke-width="3"/>
-      <path d="M96 132 q7 6 14 0" fill="none" stroke="#e97b57" stroke-width="3" stroke-linecap="round"/>
-      <g class="hat">
-        <ellipse cx="100" cy="52" rx="46" ry="12" fill="#1e8da1" stroke="#0f5e6b" stroke-width="5"/>
-        <path d="M65 45 q35-25 70 0 v22 h-70z" fill="#1da0b4" stroke="#0f5e6b" stroke-width="5" />
-        <path d="M60 55 q40-18 80 0" fill="none" stroke="#147a8a" stroke-width="5" stroke-linecap="round"/>
-      </g>
-    </svg>`;
-    wrap.addEventListener('click',()=>{ wrap.classList.remove('spin-once'); void wrap.offsetWidth; wrap.classList.add('spin-once'); });
-    return wrap;
-  }
-  const createBanisor=(text)=>{ const c=document.createElement('div'); c.className='banisor'; c.appendChild(buildBanisorSprite(120)); const p=document.createElement('p'); p.textContent=text; c.appendChild(p); return c; };
-  const celebrateBanisor=()=>{ const el=document.querySelector('.banisor-counter .banisor-sprite'); if(!el) return; el.classList.remove('spin-once'); void el.offsetWidth; el.classList.add('spin-once'); };
+  // Economics
+  const marketingBoost=()=>{ let m=0; if(state.marketing.flyerDaysLeft>0) m+=0.10; if(state.marketing.socialDaysLeft>0) m+=0.25; return m; };
+  const trafficN=()=>Math.round(ECON.F_base*(state.economyIndex||1)*(state.reputation||1)*(state.seasonality||1)*(1+marketingBoost()));
+  function conversionC(P,P0,Q,W){ const {C0,epsilon,alpha,beta,kappa,delta}=ECON; const priceTerm=Math.exp(-epsilon*(P/P0-1)); const qualityTerm=alpha+beta*Q; const waitPen=1-Math.min(kappa, delta*W); return clamp(C0*priceTerm*qualityTerm*waitPen,0,0.95); }
+  const waitW=(lambda,mu)=>clamp((lambda-mu)*ECON.tau,0,ECON.Wmax);
 
-  // Financial decisions
-  let financialStep=0, ingredientQuality=2, equipmentLevel=0, priceChoice=2, marketingLevel=0, hasInsurance=false, loanAmount=0;
-  const financialDecisions=[
-    {title:'Ce fel de ingrediente folosim?', description:'Alege tipul ingredientelor: gust și cost diferite.', options:[
-      {text:'Ieftine (10 lei)', effect:()=>{ state.lei-=10; ingredientQuality=1; alert('Ingrediente ieftine: cost mic, gust mai slab.'); }},
-      {text:'Normale (20 lei)', effect:()=>{ state.lei-=20; ingredientQuality=2; alert('Echilibru între cost și gust.'); }},
-      {text:'Premium (30 lei)', effect:()=>{ state.lei-=30; ingredientQuality=3; alert('Gust foarte bun, cost mai mare.'); }}
-    ]},
-    {title:'Ce unelte folosim?', description:'Unelte mai bune cresc producția.', options:[
-      {text:'Fără unelte noi', effect:()=>{ equipmentLevel=0; alert('Rămâi la baza: producție mică.'); }},
-      {text:'Mixer (50 lei)', effect:()=>{ if(state.lei>=50){ state.lei-=50; equipmentLevel=1; alert('Mixer cumpărat: aluat mai mult.'); } else alert('Fonduri insuficiente.'); }},
-      {text:'Cuptor (200 lei)', effect:()=>{ if(state.lei>=200){ state.lei-=200; equipmentLevel=2; alert('Cuptor electric: coacere rapidă.'); } else alert('Fonduri insuficiente.'); }}
-    ]},
-    {title:'Cât costă un biscuite?', description:'Alege un preț potrivit.', options:[
-      {text:'Mic (2 lei)', effect:()=>{ priceChoice=1; alert('Vânzare rapidă, profit mic.'); }},
-      {text:'Mediu (5 lei)', effect:()=>{ priceChoice=2; alert('Echilibru viteză/profit.'); }},
-      {text:'Mare (10 lei)', effect:()=>{ priceChoice=3; alert('Mai puțini clienți, profit per bucată mai mare.'); }}
-    ]},
-    {title:'Facem reclamă?', description:'Atragere de clienți noi.', options:[
-      {text:'Deloc', effect:()=>{ marketingLevel=0; alert('Vin cei care te cunosc.'); }},
-      {text:'Pliante (30 lei)', effect:()=>{ if(state.lei>=30){ state.lei-=30; marketingLevel=1; alert('Câțiva clienți noi.'); } else alert('Fonduri insuficiente.'); }},
-      {text:'Online (100 lei)', effect:()=>{ if(state.lei>=100){ state.lei-=100; marketingLevel=2; alert('Mulți clienți noi!'); } else alert('Fonduri insuficiente.'); }}
-    ]},
-    {title:'Cum gestionăm banii?', description:'Economisește, reinvestește sau cheltuiește.', options:[
-      {text:'Economisim', effect:()=>{ const g=Math.floor(state.lei*0.05); state.lei+=g; alert('Economisire +5%'); }},
-      {text:'Reinvestim', effect:()=>{ alert('Reinvestiția te ajută pe viitor.'); }},
-      {text:'Răsfăț', effect:()=>{ const spent=Math.min(20,state.lei); state.lei-=spent; alert('Distracție acum, buget mai mic.'); }}
-    ]},
-    {title:'Protecție la surprize?', description:'Evenimente neașteptate pot apărea.', options:[
-      {text:'Împrumut (100 lei)', effect:()=>{ loanAmount+=100; state.lei+=100; alert('Împrumut luat.'); }},
-      {text:'Asigurare (20 lei)', effect:()=>{ if(state.lei>=20){ state.lei-=20; hasInsurance=true; alert('Ești asigurat.'); } else alert('Fonduri insuficiente.'); }},
-      {text:'Nimic', effect:()=>{ alert('Riști pierderi când apare neprevăzutul.'); }}
-    ]}
-  ];
-
-  function showFinancialDecision(){
-    clearGame(); if(financialStep>=financialDecisions.length){ financialStep=0; showOrderScreen(); return; }
-    const dec=financialDecisions[financialStep]; const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-shop';
-    const h=document.createElement('h2'); h.textContent=dec.title; s.appendChild(h); const p=document.createElement('p'); p.textContent=dec.description; s.appendChild(p);
-    dec.options.forEach(opt=>{ const b=document.createElement('button'); b.textContent=opt.text; b.addEventListener('click',()=>{ opt.effect(); updateLeiDisplay(); saveState(state); financialStep++; showFinancialDecision(); }); s.appendChild(b); });
-    s.appendChild(createBanisor('Alege o opțiune pentru a învăța despre bani!'));
-    root.appendChild(s);
+  // Screens: Plan
+  function showPlan(){
+    clearRoot(); stationBar('Plan'); topDay(); topCash(); const root=document.getElementById('cookie-game'); const wrap=document.createElement('div'); wrap.className='panel wide'; const h=document.createElement('h2'); h.textContent='Planul Zilei'; wrap.appendChild(h);
+    const prod=state.products.croissant; const capacityDaily=(()=>{ const ovenFactor=state.upgrades.ovenPlus?1.5:1; const ovenCap=state.capacity.ovenBatchSize*ovenFactor*state.capacity.ovenBatchesPerDay; return Math.min(state.capacity.prepPerDay, ovenCap, state.capacity.decorPerDay); })();
+    const pricePanel=document.createElement('div'); pricePanel.className='panel'; pricePanel.innerHTML=`<div class="section-title">Setează prețuri</div><div class="row"><div class="col"><div>Preț Croissant (lei)</div><input id="priceIn" type="range" min="${prod.P0*0.7}" max="${prod.P0*1.3}" step="0.1" value="${prod.price}"><div><input id="priceNum" class="num" type="number" step="0.1" value="${prod.price}"> lei <span class="muted">(min ${fmt(prod.P0*0.7)}, max ${fmt(prod.P0*1.3)})</span></div></div><div class="col"><div>Happy Hour</div><div class="grid cols-2"><label>Start <input id="hhStart" type="time" value="${prod.happyHour.start}"></label><label>Final <input id="hhEnd" type="time" value="${prod.happyHour.end}"></label></div><div>Discount <input id="hhDisc" type="range" min="0.05" max="0.20" step="0.01" value="${prod.happyHour.discount}"> <span id="hhDiscVal">${Math.round(prod.happyHour.discount*100)}%</span></div><label><input id="hhEnable" type="checkbox" ${prod.happyHour.enabled?'checked':''}> Activează Happy Hour</label></div></div>`; wrap.appendChild(pricePanel);
+    const lotPanel=document.createElement('div'); lotPanel.className='panel'; lotPanel.innerHTML=`<div class="section-title">Lot de producție</div>`; const lotRow=document.createElement('div'); lotRow.className='row'; const lotCol=document.createElement('div'); lotCol.className='col'; lotCol.innerHTML=`<label>Cantitate planificată: <input id="planQty" class="num" type="number" step="1" min="0" value="${prod.plannedQty}"></label><div class="small muted">Capacitate pe zi: ${capacityDaily} buc</div><div class="bar" id="capBar"><span style="width:0"></span></div><div id="capMsg" class="small"></div>`; lotRow.appendChild(lotCol); lotPanel.appendChild(lotRow); wrap.appendChild(lotPanel);
+    const ingPanel=document.createElement('div'); ingPanel.className='panel'; const need=Math.max(0, prod.plannedQty - (prod._ing||0)); ingPanel.innerHTML=`<div class="section-title">Achiziții ingrediente</div><table class="table"><thead><tr><th>Ingredient</th><th>Stoc</th><th>Comandă</th><th>Cost/unit</th><th>Total</th></tr></thead><tbody><tr><td>Ingredient croissant</td><td id="ingStock">${prod._ing||0}</td><td><input id="ingOrder" class="num" type="number" min="0" value="${need}"></td><td>${fmt(prod.cost.ingredients)} lei</td><td><span id="ingTotal">${fmt(need*prod.cost.ingredients)}</span> lei</td></tr></tbody></table><div class="small"><a href="#" id="autoFill">Completează automat</a></div><div id="lowStockMsg" class="small warn"></div>`; wrap.appendChild(ingPanel);
+    const mPanel=document.createElement('div'); mPanel.className='panel'; mPanel.innerHTML=`<div class="section-title">Marketing</div><label><input id="mFlyer" type="checkbox"> Flyer local (+10% trafic, 2 zile) – 80 lei</label><br><label><input id="mSocial" type="checkbox"> Promo Social (+25% trafic, 1 zi) – 150 lei</label><div class="small muted">Active acum: Flyer ${state.marketing.flyerDaysLeft}z, Social ${state.marketing.socialDaysLeft}z.</div>`; wrap.appendChild(mPanel);
+    const startPanel=document.createElement('div'); startPanel.className='panel'; const startBtn=document.createElement('button'); startBtn.textContent='Start zi'; startBtn.addEventListener('click',()=>{ const p=parseFloat(document.getElementById('priceNum').value); prod.price=clamp(p, prod.P0*0.7, prod.P0*1.3); prod.happyHour.start=(document.getElementById('hhStart').value||'16:00'); prod.happyHour.end=(document.getElementById('hhEnd').value||'17:00'); prod.happyHour.discount=parseFloat(document.getElementById('hhDisc').value||'0.1'); prod.happyHour.enabled=document.getElementById('hhEnable').checked; prod.plannedQty=Math.max(0, Math.round(parseFloat(document.getElementById('planQty').value)||0)); const order=Math.max(0, Math.round(parseFloat(document.getElementById('ingOrder').value)||0)); const costIng=order*prod.cost.ingredients; if(costIng>0){ if(state.cash>=costIng){ state.cash-=costIng; prod._ing=(prod._ing||0)+order; } else { alert('Fonduri insuficiente pentru ingrediente.'); return; } } let mkCost=0; if(document.getElementById('mFlyer').checked){ state.marketing.flyerDaysLeft+=2; mkCost+=80; } if(document.getElementById('mSocial').checked){ state.marketing.socialDaysLeft+=1; mkCost+=150; } if(mkCost>0){ if(state.cash>=mkCost){ state.cash-=mkCost; state.today=state.today||{}; state.today.costMarketing=(state.today.costMarketing||0)+mkCost; } else { alert('Fonduri insuficiente pentru marketing.'); return; } } const bs=state.capacity.ovenBatchSize*(state.upgrades.ovenPlus?1.5:1); const trays=Math.ceil(prod.plannedQty/bs)||0; state.today=state.today||{}; state.today.production={product:'croissant',trays,batchSize:bs,produced:0,trayList:[]}; for(let i=0;i<trays;i++){ const size=(i===trays-1)?(prod.plannedQty-bs*(trays-1)):bs; state.today.production.trayList.push({id:i+1,size,scheduled:false,started:false,done:false,quality:0,progress:0}); } saveState(state); topCash(); showProduction(); }); startPanel.appendChild(startBtn); startPanel.appendChild(createBanisor('Setează prețul, planul și pornește ziua!')); wrap.appendChild(startPanel);
+    root.appendChild(wrap);
+    const priceIn=document.getElementById('priceIn'); const priceNum=document.getElementById('priceNum'); priceIn.addEventListener('input',()=>{ priceNum.value=priceIn.value; }); priceNum.addEventListener('input',()=>{ priceIn.value=priceNum.value; }); const hhDisc=document.getElementById('hhDisc'); const hhDiscVal=document.getElementById('hhDiscVal'); hhDisc.addEventListener('input',()=>{ hhDiscVal.textContent=Math.round(parseFloat(hhDisc.value)*100)+'%'; }); const planQty=document.getElementById('planQty'); const capBar=document.getElementById('capBar'); const capMsg=document.getElementById('capMsg'); const refreshCap=()=>{ const val=Math.max(0, Math.round(parseFloat(planQty.value)||0)); const pct=capacityDaily?Math.min(100, Math.round(100*val/capacityDaily)):0; const span=capBar.querySelector('span'); span.style.width=pct+'%'; capBar.classList.toggle('warn', pct>90 && pct<=110); capBar.classList.toggle('bad', pct>110); capMsg.textContent=pct>110?'Depășești capacitatea zilnică!':(pct>90?'Ești aproape de limită.':'OK, în limită.'); }; planQty.addEventListener('input',refreshCap); refreshCap(); const ingOrder=document.getElementById('ingOrder'); const ingTotal=document.getElementById('ingTotal'); const auto=document.getElementById('autoFill'); const lowMsg=document.getElementById('lowStockMsg'); const refreshIng=()=>{ const qty=Math.max(0, Math.round(parseFloat(ingOrder.value)||0)); ingTotal.textContent=fmt(qty*prod.cost.ingredients); const expect=(prod._ing||0)+qty; lowMsg.textContent= expect<prod.plannedQty ? 'Atenție: stoc sub minim pentru lotul planificat.' : ''; }; ingOrder.addEventListener('input',refreshIng); refreshIng(); auto.addEventListener('click',(e)=>{ e.preventDefault(); const missing=Math.max(0, prod.plannedQty-(prod._ing||0)); ingOrder.value=String(missing); refreshIng(); });
   }
 
-  // Helpers
-  const clearGame=()=>{ const root=document.getElementById('cookie-game'); root.innerHTML=''; };
+  // Production
+  let prodTimers=[];
+  function showProduction(){ clearRoot(); stationBar('Producție'); topDay(); topCash(); const root=document.getElementById('cookie-game'); const wrap=document.createElement('div'); wrap.className='panel wide'; wrap.innerHTML='<h2>Producție</h2>'; const pr=state.today.production; const info=document.createElement('div'); info.className='small muted'; info.textContent=`Tăvi de copt: ${pr.trays} (mărime tavă ${pr.batchSize} buc)`; wrap.appendChild(info); const belt=document.createElement('div'); belt.className='belt'; belt.id='belt'; wrap.appendChild(belt); const actions=document.createElement('div'); actions.className='tray-actions'; const autoBtn=document.createElement('button'); autoBtn.textContent='Auto-programează tăvile'; autoBtn.addEventListener('click',()=>{ pr.trayList.forEach(t=>{ if(!t.scheduled){ createTrayCard(t,belt); t.scheduled=true; }}); }); actions.appendChild(autoBtn); const startBtn=document.createElement('button'); startBtn.textContent='Start coacerea'; startBtn.addEventListener('click',()=>{ startAllTrays(belt); }); actions.appendChild(startBtn); wrap.appendChild(actions); const hint=document.createElement('div'); hint.className='hint'; hint.textContent='Hint: Apasă „Scoate acum” când bara e în zona verde. Click dreapta → „Prioritizează”.'; wrap.appendChild(hint); pr.trayList.forEach(t=>{ if(!t.scheduled){ createTrayCard(t,belt); t.scheduled=true; }}); const fin=document.createElement('button'); fin.textContent='Finalizează producția'; fin.addEventListener('click',()=>{ const key=pr.product; let total=0,qsum=0; pr.trayList.forEach(t=>{ if(t.done){ total+=t.size; qsum+=t.size*t.quality; }}); const qavg= total>0? qsum/total : 0.85; addInventory(key,total,qavg); state.cash -= total * state.products[key].cost.laborVar; saveState(state); topCash(); showService(); }); wrap.appendChild(fin); wrap.appendChild(createBanisor('Coace la timp pentru Q mai mare!')); root.appendChild(wrap); }
+  function createTrayCard(t,belt){ const card=document.createElement('div'); card.className='tray-card'; card.dataset.id=String(t.id); card.innerHTML=`<div class="tray-header"><span>Tava #${t.id}</span><span>${t.size} buc</span></div>`; const prog=document.createElement('div'); prog.className='progress'; const fill=document.createElement('span'); prog.appendChild(fill); const window=document.createElement('div'); window.className='window'; prog.appendChild(window); card.appendChild(prog); const btn=document.createElement('button'); btn.textContent='Scoate acum'; btn.disabled=true; card.appendChild(btn); card.addEventListener('contextmenu',(e)=>{ e.preventDefault(); belt.prepend(card); }); belt.appendChild(card); t._fill=fill; t._btn=btn; t._card=card; }
+  function startAllTrays(belt){ prodTimers.forEach(clearInterval); prodTimers=[]; const pr=state.today.production; const bakeMs=8000; const winStart=0.55, winEnd=0.70; pr.trayList.forEach(t=>{ if(t.started) return; t.started=true; let elapsed=0; const int=100; const timer=setInterval(()=>{ elapsed+=int; t.progress=clamp(elapsed/bakeMs,0,1); const pct=Math.round(t.progress*100); t._fill.style.width=pct+'%'; t._card.querySelector('.window').style.left=(winStart*100)+'%'; t._card.querySelector('.window').style.width=((winEnd-winStart)*100)+'%'; const inWindow=(t.progress>=winStart && t.progress<=winEnd); t._btn.disabled=!inWindow; if(inWindow && state.upgrades.timerAuto){ t._btn.click(); } if(elapsed>=bakeMs*1.2){ finishTray(t,0.72); clearInterval(timer); } }, int); prodTimers.push(timer); t._btn.onclick=()=>{ const p=t.progress; const mid=(winStart+winEnd)/2; const dist=Math.abs(p-mid); let q=0.95 - dist*0.6; q=clamp(q,0.70,0.97); finishTray(t,q); clearInterval(timer); }; }); }
+  function finishTray(t,q){ if(t.done) return; t.done=true; t.quality=q; t._btn.disabled=true; t._card.style.opacity='0.7'; const tag=document.createElement('div'); tag.className='small'; tag.textContent='Q='+fmt(q); t._card.appendChild(tag); }
 
-  // Screens
-  function showOrderScreen(){
-    clearGame(); renderStationBar(''); currentOrder=ORDERS[Math.floor(Math.random()*ORDERS.length)]; currentClient=CLIENTS[Math.floor(Math.random()*CLIENTS.length)];
-    const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-shop';
-    const orderNumber=(state.progress.cookies && state.progress.cookies.day) ? state.progress.cookies.day : 1;
-    const ticket=document.createElement('div'); ticket.className='order-ticket pulse'; ticket.textContent='Comanda '+orderNumber; s.appendChild(ticket);
-    const client=document.createElement('div'); client.className='client-right idle'; client.textContent=currentClient.emoji; s.appendChild(client);
-    const bubble=document.createElement('div'); bubble.className='speech-bubble'; const oImg=document.createElement('img'); oImg.src=DECORATIONS[currentOrder.decoration].final; oImg.style.width='80px'; oImg.style.height='80px'; bubble.appendChild(oImg); s.appendChild(bubble);
-    const panel=document.createElement('div'); panel.className='panel'; panel.innerHTML='<strong>Bun venit la FinKids Biscuiți!</strong><br>'+currentClient.name+' dorește un biscuite cu <em>'+currentOrder.decoration+'</em>.<br>Banisor te așteaptă după tejghea!'; s.appendChild(panel);
-    const btn=document.createElement('button'); btn.textContent='Intră în bucătărie'; btn.addEventListener('click', showMixScreen); s.appendChild(btn);
-    const ban=document.createElement('div'); ban.className='banisor-counter'; ban.appendChild(buildBanisorSprite(140)); s.appendChild(ban);
-    root.appendChild(s);
+  // Service
+  function showService(){
+    clearRoot(); stationBar('Servire'); topDay(); topCash();
+    const root=document.getElementById('cookie-game'); const wrap=document.createElement('div'); wrap.className='panel wide'; wrap.innerHTML='<h2>Servire</h2>';
+    const prod=state.products.croissant; const stock=totalStock('croissant'); const qavg=avgQuality('croissant'); const N=trafficN();
+    const baseMu=state.capacity.cashierMu + (state.upgrades.posRapid?0.8:0); const mu=baseMu + Math.max(0, state.staff.cashier-1)*0.5;
+    const dayMinutes=8*60; const lambda=N/dayMinutes; const W=waitW(lambda, mu);
+    const P=prod.price, P0=prod.P0; let Cbase=conversionC(P,P0,qavg,W);
+    // Happy hour + promo 30m
+    const hhOn = !!prod.happyHour.enabled; const hhDisc = prod.happyHour.discount||0.1;
+    const Ph=P*(1-hhDisc); const Ch=conversionC(Ph,P0,qavg,Math.max(0,W-0.2));
+    const promo30 = !!(state.today && state.today.promo30min);
+    let C = Cbase;
+    if(hhOn) C = (7/8)*Cbase + (1/8)*Ch;
+    if(promo30) C = (15/16)*C + (1/16)*conversionC(P*0.9, P0, qavg, Math.max(0,W-0.1));
+    const demand=Math.round(N*C);
+    const {sold}=consumeInventory('croissant', Math.min(stock,demand));
+    const revenue=sold*P;
+    const varUnit=prod.cost.ingredients+prod.cost.laborVar; const cogs=sold*varUnit; const fixed=state.fixedCostsPerDay; const holding=(stock-sold)*state.holdCostPerUnitPerDay; const mCost=(state.today&&state.today.costMarketing)||0;
+    state.cash += revenue; topCash();
+    state.today=state.today||{}; state.today.report={N,W,demand,sold,revenue,cogs,fixed,holding,marketing:mCost,profit:revenue-cogs-fixed-holding-mCost};
+
+    // Panels: Promoții rapide și Cozi/personal
+    const quick=document.createElement('div'); quick.className='panel'; quick.innerHTML = `<div class="section-title">Promoții rapide</div>`;
+    const hhToggle=document.createElement('label'); const hhCb=document.createElement('input'); hhCb.type='checkbox'; hhCb.checked=prod.happyHour.enabled; hhCb.addEventListener('change',()=>{ prod.happyHour.enabled=hhCb.checked; saveState(state); showService(); }); hhToggle.appendChild(hhCb); hhToggle.appendChild(document.createTextNode(' Happy Hour ON/OFF'));
+    const btn30=document.createElement('button'); btn30.textContent='Reducere Croissant −10% (30 min)'; btn30.addEventListener('click',()=>{ state.today=state.today||{}; state.today.promo30min=true; saveState(state); showService(); }); quick.appendChild(hhToggle); quick.appendChild(document.createTextNode(' ')); quick.appendChild(btn30); wrap.appendChild(quick);
+
+    const staffP=document.createElement('div'); staffP.className='panel'; staffP.innerHTML=`<div class="section-title">Cozi și personal</div>`; const lbl=document.createElement('label'); lbl.textContent='Angajați la casă: '; const sel=document.createElement('select'); for(let i=1;i<=state.staff.total;i++){ const opt=document.createElement('option'); opt.value=String(i); opt.textContent=String(i); if(i===state.staff.cashier) opt.selected=true; sel.appendChild(opt);} sel.addEventListener('change',()=>{ state.staff.cashier=parseInt(sel.value,10); saveState(state); showService(); }); lbl.appendChild(sel); staffP.appendChild(lbl); wrap.appendChild(staffP);
+
+    // Summary
+    const sum=document.createElement('div'); sum.className='row'; const c1=document.createElement('div'); c1.className='col'; c1.innerHTML=`<div class="section-title">Sumar</div><div>Clienți intrați N: <b>${N}</b></div><div>Conversie estimată C: <b>${fmt(C)}</b></div><div>Vânzări efective: <b>${sold}</b></div><div>W mediu: <b>${fmt(W)} min</b></div>`; const c2=document.createElement('div'); c2.className='col'; c2.innerHTML=`<div class="section-title">Venituri & costuri</div><div>Venituri: <b>${fmt(revenue)}</b> lei</div><div>COGS: <b>${fmt(cogs)}</b> lei</div><div>Fixe: <b>${fmt(fixed)}</b> lei</div><div>Holding: <b>${fmt(holding)}</b> lei</div><div>Marketing: <b>${fmt(mCost)}</b> lei</div>`; const c3=document.createElement('div'); c3.className='col'; c3.innerHTML=`<div class="section-title">Rezultat</div><div>Profit (provizoriu): <b>${fmt(state.today.report.profit)}</b> lei</div>`; sum.appendChild(c1); sum.appendChild(c2); sum.appendChild(c3); wrap.appendChild(sum);
+
+    const next=document.createElement('button'); next.textContent='Finalizează ziua → Raport'; next.addEventListener('click', showReport); wrap.appendChild(next);
+    wrap.appendChild(createBanisor('Poți folosi Happy Hour pentru lichidare rapidă.'));
+    root.appendChild(wrap);
   }
 
-  function showMixScreen(){
-    clearGame(); currentExtras={cacao:false, cocos:false}; renderStationBar('Mixare');
-    const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-worktop';
-    const h=document.createElement('h2'); h.textContent='Pregătirea aluatului'; const p=document.createElement('p'); p.textContent='Trage ingredientele în bol pentru aluat.'; s.appendChild(h); s.appendChild(p);
-    const bowl=document.createElement('div'); bowl.className='bowl'; let addedBase=0; const mixExtras={cacao:false, cocos:false}; const baseKeys=['faina','zahar','lapte']; let mixBtnShown=false;
-    bowl.addEventListener('dragover',e=>e.preventDefault()); bowl.addEventListener('drop',e=>{ e.preventDefault(); const key=e.dataTransfer.getData('text/plain'); const item=document.querySelector('.ingredient-slot[data-key="'+key+'"]'); if(item && !item.classList.contains('used')){ item.classList.add('used'); if(baseKeys.includes(key)) addedBase++; if(key==='cacao') mixExtras.cacao=true; if(key==='cocos') mixExtras.cocos=true; const ing=ingredientsMaster.find(o=>o.key===key); if(ing){ const drop=document.createElement('img'); drop.src=ing.img; drop.className='drop-in'; const rect=bowl.getBoundingClientRect(); const size=Math.min(rect.width*0.12,50); drop.style.width=size+'px'; drop.style.height=size+'px'; drop.style.left=(rect.width*0.15+Math.random()*rect.width*0.7)+'px'; drop.style.top=(rect.height*0.1+Math.random()*rect.height*0.5)+'px'; bowl.appendChild(drop);} if(addedBase>=3 && !mixBtnShown){ mixBtn.style.display='inline-block'; mixBtnShown=true; } } });
-    s.appendChild(bowl);
-    const ingredientsMaster=[ {key:'faina', img:'flour.png', name:'Făină'}, {key:'zahar', img:'sugar.png', name:'Zahăr'}, {key:'lapte', img:'milk.png', name:'Lapte'}, {key:'cacao', img:'cacao.png', name:'Cacao'}, {key:'cocos', img:'coconut.png', name:'Nucă de cocos'} ];
-    const board=document.createElement('div'); board.className='ingredients-board'; ingredientsMaster.forEach((ing,i)=>{ const slot=document.createElement('div'); slot.className='ingredient-slot'; slot.dataset.key=ing.key; slot.style.animationDelay=(i*0.1)+'s'; const img=document.createElement('img'); img.src=ing.img; img.alt=ing.name; img.setAttribute('draggable','true'); img.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/plain', ing.key); }); slot.appendChild(img); const label=document.createElement('div'); label.className='ingredient-name'; label.textContent=ing.name; const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.flexDirection='column'; wrap.style.alignItems='center'; wrap.appendChild(slot); wrap.appendChild(label); board.appendChild(wrap); });
-    s.appendChild(board);
-    const mixBtn=document.createElement('button'); mixBtn.textContent='Amestecă și coace'; mixBtn.style.display='none'; mixBtn.style.position='absolute'; mixBtn.style.bottom='1.2rem'; mixBtn.style.left='50%'; mixBtn.style.transform='translateX(-50%)'; mixBtn.addEventListener('click',()=>{ currentExtras={...mixExtras}; showBakeScreen(); }); s.appendChild(mixBtn);
-    s.appendChild(createBanisor('Adaugă făină, zahăr, lapte + (opțional) cacao sau cocos.'));
-    root.appendChild(s);
-  }
+  // Report
+  function showReport(){ clearRoot(); stationBar('Raport'); topDay(); topCash(); const root=document.getElementById('cookie-game'); const wrap=document.createElement('div'); wrap.className='panel wide'; wrap.innerHTML='<h2>Raport de zi</h2>'; const r=state.today.report; const prod=state.products.croissant; const remaining=totalStock('croissant'); const Q=avgQuality('croissant'); const complaints = Math.max(0, (r.N>0)? (1 - r.sold/Math.max(1,r.demand)) : 0); const f = clamp(0.9 + 0.2*(Q - 0.8) - 0.05*complaints, 0.80, 1.20); const nextR = clamp(0.80, 1.20, ECON.rho*(state.reputation||1) + (1-ECON.rho)*f); const tbl=document.createElement('div'); tbl.className='row'; const cards=document.createElement('div'); cards.className='col'; cards.innerHTML=`<div class="section-title">Financiar</div><div>Venituri: <b>${fmt(r.revenue)}</b> lei</div><div>COGS vândut: <b>${fmt(r.cogs)}</b> lei</div><div>Costuri fixe: <b>${fmt(r.fixed)}</b> lei</div><div>Holding: <b>${fmt(r.holding)}</b> lei</div><div>Marketing: <b>${fmt(r.marketing)}</b> lei</div><div>Profit zi: <b>${fmt(r.profit)}</b> lei</div>`; const sales=document.createElement('div'); sales.className='col'; sales.innerHTML=`<div class="section-title">Vânzări per produs</div><table class="table"><thead><tr><th>Produs</th><th>Preț</th><th>Vândute</th><th>Stoc rămas</th></tr></thead><tbody><tr><td>${prod.name}</td><td>${fmt(prod.price)}</td><td>${r.sold}</td><td>${remaining}</td></tr></tbody></table><div class="section-title">Reputație</div><div>R curent: ${fmt(state.reputation)} → R următor (estim.): <b>${fmt(nextR)}</b></div>`; tbl.appendChild(cards); tbl.appendChild(sales); wrap.appendChild(tbl); const expPreview = deepClone(state.products.croissant.stock).filter(l=>l.age>=prod.shelfLifeDays).reduce((s,l)=>s+l.qty,0); const salvageBtn=document.createElement('button'); salvageBtn.textContent='Salvează stoc expirat la 20% din cost'; salvageBtn.addEventListener('click',()=>{ const expired=ageAndExpire(); const lots=expired['croissant']||[]; const n=lots.reduce((s,l)=>s+l.qty,0); const rec=n*ECON.gammaSalvage*(prod.cost.ingredients+prod.cost.laborVar); state.cash+=rec; topCash(); alert(`Salvat ${n} buc la ${fmt(rec)} lei.`); salvageBtn.disabled=true; discardBtn.disabled=true; }); const discardBtn=document.createElement('button'); discardBtn.textContent='Aruncă stoc expirat (−0.02 R)'; discardBtn.addEventListener('click',()=>{ const expired=ageAndExpire(); const n=(expired['croissant']||[]).reduce((s,l)=>s+l.qty,0); state.reputation=clamp(state.reputation-0.02,0.80,1.20); alert(`Aruncate ${n} buc.`); salvageBtn.disabled=true; discardBtn.disabled=true; }); const expRow=document.createElement('div'); expRow.className='row'; const expCol=document.createElement('div'); expCol.className='col'; expCol.innerHTML=`<div class="section-title">Perisabilitate</div><div>Stoc expirat azi (estimare): <b>${expPreview}</b> buc</div>`; expRow.appendChild(expCol); const exBtns=document.createElement('div'); exBtns.className='col'; exBtns.appendChild(salvageBtn); exBtns.appendChild(discardBtn); wrap.appendChild(expRow); wrap.appendChild(exBtns); const up=document.createElement('div'); up.className='panel'; up.innerHTML=`<div class="section-title">Upgrade-uri</div>`; const upRow=document.createElement('div'); upRow.className='row'; const u1=document.createElement('div'); u1.className='col'; const u1btn=document.createElement('button'); u1btn.textContent= state.upgrades.ovenPlus?'Cuptor+ (activ)':'Cumpără Cuptor+ – 500 lei'; u1btn.disabled=state.upgrades.ovenPlus; u1btn.addEventListener('click',()=>{ if(state.cash>=500){ state.cash-=500; state.upgrades.ovenPlus=true; topCash(); u1btn.textContent='Cuptor+ (activ)'; u1btn.disabled=true; } else alert('Fonduri insuficiente'); }); u1.appendChild(u1btn); upRow.appendChild(u1); const u2=document.createElement('div'); u2.className='col'; const u2btn=document.createElement('button'); u2btn.textContent= state.upgrades.posRapid?'POS Rapid (activ)':'Cumpără POS Rapid – 350 lei'; u2btn.disabled=state.upgrades.posRapid; u2btn.addEventListener('click',()=>{ if(state.cash>=350){ state.cash-=350; state.upgrades.posRapid=true; topCash(); u2btn.textContent='POS Rapid (activ)'; u2btn.disabled=true; } else alert('Fonduri insuficiente'); }); u2.appendChild(u2btn); upRow.appendChild(u2); up.appendChild(upRow); wrap.appendChild(up); const cont=document.createElement('button'); cont.textContent='Continuă → Ziua următoare'; cont.addEventListener('click',()=>{ if(state.loan.principal>0){ const interest=state.loan.principal*state.loan.dailyRate; state.loan.principal+=interest; state.cash-=interest; } state.marketing.flyerDaysLeft=Math.max(0,state.marketing.flyerDaysLeft-1); state.marketing.socialDaysLeft=Math.max(0,state.marketing.socialDaysLeft-1); state.reputation=nextR; state.day+=1; state.products.croissant.stock.forEach(l=>l.age++); state.today=null; saveState(state); topDay(); topCash(); showPlan(); }); wrap.appendChild(cont); wrap.appendChild(createBanisor('Analizează și ajustează pentru ziua următoare.')); root.appendChild(wrap); }
 
-  function showBakeScreen(){
-    clearGame(); renderStationBar('Coacere'); const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-kitchen';
-    const h=document.createElement('h2'); h.textContent='Coacerea biscuitului'; s.appendChild(h);
-    const oven=document.createElement('div'); oven.className='oven-animation-container'; const ovenImg=document.createElement('img'); ovenImg.src='oven_open.png'; ovenImg.alt='Cuptor'; ovenImg.className='oven-image'; oven.appendChild(ovenImg);
-    const tray=document.createElement('div'); tray.className='baking-tray'; const cookie=document.createElement('img'); cookie.className='cookie-on-tray'; let bakeSrc='cookie_bake_plain.png'; if(currentExtras.cacao) bakeSrc='cookie_bake_cacao.png'; if(currentExtras.cocos) bakeSrc='cookie_bake_cocos.png'; cookie.src=bakeSrc; cookie.alt='Biscuite pe tavă'; tray.appendChild(cookie); oven.appendChild(tray); s.appendChild(oven);
-    const prog=document.createElement('div'); prog.className='progress-container'; const bar=document.createElement('div'); bar.className='progress-bar'; prog.appendChild(bar); s.appendChild(prog);
-    s.appendChild(createBanisor('Așteaptă puțin până se coace biscuitele.'));
-    root.appendChild(s);
-    let elapsed=0; const t=setInterval(()=>{ elapsed+=100; bar.style.width=Math.min(100,(elapsed/3000)*100)+'%'; if(elapsed>=3000){ clearInterval(t); showDecorateScreen(); } },100);
-    setTimeout(()=>{ ovenImg.src='oven_closed.png'; tray.style.opacity='0'; },600);
-    setTimeout(()=>{ ovenImg.src='oven_open.png'; tray.style.opacity='1'; },2400);
-  }
-
-  function showDecorateScreen(){
-    clearGame(); renderStationBar('Decorare'); const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-kitchen';
-    const h=document.createElement('h2'); h.textContent='Ornarea biscuitului'; const p=document.createElement('p'); p.textContent='Trage decorațiunea pe biscuite.'; s.appendChild(h); s.appendChild(p);
-    const cont=document.createElement('div'); cont.className='cookie-container'; const base=document.createElement('div'); base.className='cookie-base'; cont.appendChild(base);
-    const drop=document.createElement('div'); drop.style.position='absolute'; drop.style.inset='0'; cont.appendChild(drop);
-    let pieces=0; let serveBtn;
-    drop.addEventListener('dragover',e=>e.preventDefault()); drop.addEventListener('drop', e=>{ e.preventDefault(); const decor=e.dataTransfer.getData('text/plain'); if(decor===currentOrder.decoration){ const part=document.createElement('img'); part.src=DECORATIONS[currentOrder.decoration].piece; part.className='topping-img'; part.style.position='absolute'; part.style.left='75px'; part.style.top='75px'; part.style.width='30px'; part.style.height='30px'; cont.appendChild(part); pieces++; if(pieces>=1){ setTimeout(()=>{ cont.innerHTML=''; const final=document.createElement('img'); final.src=DECORATIONS[currentOrder.decoration].final; final.style.width='180px'; final.style.height='180px'; final.style.borderRadius='50%'; cont.appendChild(final); serveBtn.style.display='inline-block'; },500);} } else { cont.classList.add('shake'); setTimeout(()=>cont.classList.remove('shake'),450); alert('Decor greșit pentru comanda curentă.'); } });
-    s.appendChild(cont);
-    const tops=document.createElement('div'); tops.className='toppings-container'; const t=document.createElement('img'); t.src=DECORATIONS[currentOrder.decoration].piece; t.className='topping-img'; t.setAttribute('draggable','true'); t.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/plain', currentOrder.decoration); }); tops.appendChild(t); s.appendChild(tops);
-    serveBtn=document.createElement('button'); serveBtn.textContent='Servește biscuitele'; serveBtn.style.display='none'; serveBtn.addEventListener('click', showServeScreen); s.appendChild(serveBtn);
-    s.appendChild(createBanisor('Decorează cu grijă biscuitele.'));
-    root.appendChild(s);
-  }
-
-  function showServeScreen(){
-    clearGame(); document.querySelectorAll('.station-bar').forEach(el=>el.remove());
-    const root=document.getElementById('cookie-game'); const s=document.createElement('div'); s.className='screen active-screen scene-shop';
-    const h=document.createElement('h2'); h.textContent='Livrarea biscuitului'; const msg=document.createElement('p'); msg.textContent=currentClient.name+' a primit biscuitele și este fericit!'; s.appendChild(h); s.appendChild(msg);
-    const final=document.createElement('img'); final.src=DECORATIONS[currentOrder.decoration].final; final.style.width='180px'; final.style.height='180px'; final.style.borderRadius='50%'; s.appendChild(final);
-    addLei(3);
-    const nextDay=(state.progress.cookies.day||1)+1; const best=Math.max(state.progress.cookies.profitBest||0, 3); updateCookieProgress({day:nextDay, profitBest:best});
-    const panel=document.createElement('div'); panel.className='panel'; panel.innerHTML='<strong>Rezumat:</strong><br>Mixare: <span style="color:#d87b00">100%</span><br>Coacere: <span style="color:#d87b00">100%</span><br>Decorare: <span style="color:#d87b00">100%</span><br><br>Total lei: <span style="color:#d87b00">'+state.lei+'</span>'; s.appendChild(panel);
-    const again=document.createElement('button'); again.textContent='Prepară alt biscuite'; again.addEventListener('click', showOrderScreen);
-    const exit=document.createElement('button'); exit.textContent='Închide jocul'; exit.addEventListener('click',()=>alert('Mulțumim că ai jucat!'));
-    s.appendChild(again); s.appendChild(exit); s.appendChild(createBanisor('Bravo! Biscuite delicios!'));
-    root.appendChild(s);
-    createConfetti(); setTimeout(showFinancialDecision, 500);
-  }
-
-  // Confetti
-  function createConfetti(){ const colors=['#f9c74f','#f9844a','#90be6d','#fda65f','#87b6e5','#f27ba5']; const c=document.createElement('div'); c.className='confetti-container'; for(let i=0;i<40;i++){ const p=document.createElement('div'); p.className='confetti-piece'; p.style.backgroundColor=colors[Math.floor(Math.random()*colors.length)]; p.style.left=Math.random()*100+'%'; p.style.animationDelay=(Math.random()*0.5)+'s'; c.appendChild(p);} document.body.appendChild(c); setTimeout(()=>{ if(document.body.contains(c)) document.body.removeChild(c); },3000); }
-
-  // Intro modal
-  function showIntro(){ const overlay=document.createElement('div'); overlay.className='modal-overlay'; const m=document.createElement('div'); m.className='modal'; const h2=document.createElement('h2'); h2.textContent='Bun venit în Simulatorul Biscuiți FinKids!'; const content=document.createElement('div'); content.innerHTML='<p>Ghid rapid:</p><ul><li><strong>Mixare</strong>: tragi făină, zahăr, lapte (opțional cacao/cocos).</li><li><strong>Coacere</strong>: urmărești tava în cuptor.</li><li><strong>Decorare</strong>: tragi decorațiunea potrivită.</li><li><strong>Servește</strong>: câștigi lei și iei decizii financiare.</li><li><strong>Progres</strong>: salvat în browser, cookie și sesiune.</li></ul>';
-    const mascot=document.createElement('div'); mascot.style.display='flex'; mascot.style.gap='12px'; mascot.style.alignItems='center'; mascot.appendChild(buildBanisorSprite(150)); const tip=document.createElement('div'); tip.textContent='Sfat: click pe Banisor pentru o rotire!'; mascot.appendChild(tip);
-    const footer=document.createElement('div'); footer.className='footer'; const label=document.createElement('label'); const chk=document.createElement('input'); chk.type='checkbox'; chk.id='dontshow'; label.appendChild(chk); label.appendChild(document.createTextNode('Nu mai arăta data viitoare'));
-    const start=document.createElement('button'); start.textContent='Start jocul'; start.addEventListener('click',()=>{ if(chk.checked){ state.meta=state.meta||{}; state.meta.introSeen=true; saveState(state);} document.body.removeChild(overlay); showOrderScreen(); });
-    footer.appendChild(label); footer.appendChild(start);
-    m.appendChild(h2); m.appendChild(content); m.appendChild(mascot); m.appendChild(footer); overlay.appendChild(m); document.body.appendChild(overlay);
-  }
-
-  function showIntroIfNeeded(){ if(state?.meta?.introSeen) { showOrderScreen(); } else { showIntro(); } }
-
-  // Global interactions
-  document.addEventListener('click', (e)=>{ const n=e.target; if(n && n.closest){ const b=n.closest('.banisor-sprite'); if(b){ b.classList.remove('spin-once'); void b.offsetWidth; b.classList.add('spin-once'); } } });
-
-  // Start
-  window.addEventListener('DOMContentLoaded', ()=>{ updateLeiDisplay(); showIntroIfNeeded(); });
+  // Global
+  document.addEventListener('click',(e)=>{ const n=e.target; if(n && n.closest){ const b=n.closest('.banisor-sprite'); if(b){ b.classList.remove('spin-once'); void b.offsetWidth; b.classList.add('spin-once'); } } });
+  window.addEventListener('DOMContentLoaded', ()=>{ topDay(); topCash(); showPlan(); });
 })();
-
