@@ -114,6 +114,46 @@
       40% { transform: translateY(-10px); }
       60% { transform: translateY(-5px); }
     }
+
+    /* --- Banisor SVG (coin) --- */
+    .banisor-sprite { width: 80px; height: 80px; display:inline-block; }
+    .banisor-sprite svg { width: 100%; height: 100%; display:block; }
+    /* în ecranul standard cu mesaj */
+    .banisor .banisor-sprite { animation: bounce 2s infinite; }
+    /* după tejghea (mai mare) */
+    .banisor-counter .banisor-sprite { width: 100px; height: 100px; animation: bounce 2s infinite; }
+
+    /* animații pe părți */
+    .banisor-sprite .hand-wave {
+      transform-box: fill-box; transform-origin: left center;
+      animation: hand-wave 2s ease-in-out infinite;
+    }
+    @keyframes hand-wave {
+      0%,100% { transform: rotate(0deg); }
+      25%     { transform: rotate(18deg); }
+      50%     { transform: rotate(-10deg); }
+      75%     { transform: rotate(14deg); }
+    }
+
+    .banisor-sprite .eye {
+      transform-box: fill-box; transform-origin: center;
+      animation: blink 4.5s infinite;
+    }
+    @keyframes blink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      94%          { transform: scaleY(0.05); }
+      96%          { transform: scaleY(1); }
+    }
+
+    .banisor-sprite .hat {
+      transform-box: fill-box; transform-origin: center;
+      animation: hat-bob 2s ease-in-out infinite;
+    }
+    @keyframes hat-bob {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      50%     { transform: translateY(-1.5px) rotate(-3deg); }
+    }
+
     /* Layout pentru ingrediente */
     /* Masa cu ingrediente pentru amestecare */
     .ingredients-board {
@@ -295,62 +335,63 @@
       height: 100px;
       animation: bounce 2s infinite;
     }
-    /* Stiluri pentru animația cuptorului */
-.oven-animation-container {
-  position: relative;
-  width: 400px;
-  height: 300px;
-  margin: 2rem auto;
-}
-.oven-image {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-.baking-tray {
-  position: absolute;
-  width: 280px;
-  height: 150px;
-  background-color: #c0c0c0;
-  border: 2px solid #8b8b8b;
-  border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  /* Poziția inițială a tăvii */
-  top: 100px;
-  left: -290px;
-  /* Animația care durează 3 secunde, la fel ca timer-ul */
-  animation: bake-animation 3s ease-in-out forwards;
 
-  /* Tava este vizibilă doar când ușa cuptorului este deschisă; controlată din JS */
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-.cookie-on-tray {
-  width: 100px;
-  height: 100px;
-}
-@keyframes bake-animation {
-  0% {
-    /* Tava este afară, în stânga */
-    transform: translateX(0);
-  }
-  20% {
-    /* Tava intră în cuptor */
-    transform: translateX(410px);
-  }
-  80% {
-    /* Tava stă în cuptor (în timpul coacerii) */
-    transform: translateX(410px);
-  }
-  100% {
-    /* Tava iese din cuptor */
-    transform: translateX(0);
-  }
-}
+    /* Stiluri pentru animația cuptorului */
+    .oven-animation-container {
+      position: relative;
+      width: 400px;
+      height: 300px;
+      margin: 2rem auto;
+    }
+    .oven-image {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .baking-tray {
+      position: absolute;
+      width: 280px;
+      height: 150px;
+      background-color: #c0c0c0;
+      border: 2px solid #8b8b8b;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      /* Poziția inițială a tăvii */
+      top: 100px;
+      left: -290px;
+      /* Animația care durează 3 secunde, la fel ca timer-ul */
+      animation: bake-animation 3s ease-in-out forwards;
+
+      /* Tava este vizibilă doar când ușa cuptorului este deschisă; controlată din JS */
+      opacity: 1;
+      transition: opacity 0.2s ease;
+    }
+    .cookie-on-tray {
+      width: 100px;
+      height: 100px;
+    }
+    @keyframes bake-animation {
+      0% {
+        /* Tava este afară, în stânga */
+        transform: translateX(0);
+      }
+      20% {
+        /* Tava intră în cuptor */
+        transform: translateX(410px);
+      }
+      80% {
+        /* Tava stă în cuptor (în timpul coacerii) */
+        transform: translateX(410px);
+      }
+      100% {
+        /* Tava iese din cuptor */
+        transform: translateX(0);
+      }
+    }
   </style>
 </head>
 <body>
@@ -371,247 +412,247 @@
     }
     let state = loadState();
 
-// -- Variabile pentru sistemul de decizii financiare --
-let financialStep = 0;
-// Parametri care pot influența profitul (simplificat)
-let ingredientQuality = 2; // 1=ieftin, 2=mediu, 3=premium
-let equipmentLevel = 0;    // 0=basic,1=mixer,2=cuptor electric
-let priceChoice = 2;       // 1=mic,2=mediu,3=mare
-let marketingLevel = 0;    // 0=none,1=mic,2=mare
-let hasInsurance = false;
-let loanAmount = 0;
+    // -- Variabile pentru sistemul de decizii financiare --
+    let financialStep = 0;
+    // Parametri care pot influența profitul (simplificat)
+    let ingredientQuality = 2; // 1=ieftin, 2=mediu, 3=premium
+    let equipmentLevel = 0;    // 0=basic,1=mixer,2=cuptor electric
+    let priceChoice = 2;       // 1=mic,2=mediu,3=mare
+    let marketingLevel = 0;    // 0=none,1=mic,2=mare
+    let hasInsurance = false;
+    let loanAmount = 0;
 
-// Definim deciziile financiare ca o listă de obiecte
-const financialDecisions = [
-  {
-    title: 'Ce fel de ingrediente folosim?',
-    description: 'Alege cu ce vrei să faci biscuiții. Ingrediente diferite au calități și prețuri diferite.',
-    options: [
+    // Definim deciziile financiare ca o listă de obiecte
+    const financialDecisions = [
       {
-        text: 'Ingrediente ieftine (10 lei) – biscuiții pot fi mai puțin gustoși',
-        effect: () => {
-          state.lei -= 10;
-          ingredientQuality = 1;
-          alert('Ai ales ingrediente ieftine. Biscuiții s-ar putea să nu fie la fel de buni, dar costă mai puțin.');
-        }
-      },
-      {
-        text: 'Ingrediente normale (20 lei) – echilibru între cost și gust',
-        effect: () => {
-          state.lei -= 20;
-          ingredientQuality = 2;
-          alert('Ai ales ingrediente normale. Biscuiții vor fi buni, iar costul este rezonabil.');
-        }
-      },
-      {
-        text: 'Ingrediente de calitate (30 lei) – biscuiți foarte gustoși',
-        effect: () => {
-          state.lei -= 30;
-          ingredientQuality = 3;
-          alert('Ai ales ingrediente de calitate. Biscuiții vor fi delicioși, chiar dacă ai cheltuit mai mult.');
-        }
-      }
-    ]
-  },
-  {
-    title: 'Ce unelte folosim?',
-    description: 'Unelte mai bune ne ajută să facem mai mulți biscuiți. Ce alegi?',
-    options: [
-      {
-        text: 'Fără unelte noi – facem puțini biscuiți',
-        effect: () => {
-          equipmentLevel = 0;
-          alert('Nu ai cumpărat unelte noi. Vom face doar câțiva biscuiți deodată.');
-        }
-      },
-      {
-        text: 'Mixer simplu (50 lei) – facem mai mult aluat',
-        effect: () => {
-          if (state.lei >= 50) {
-            state.lei -= 50;
-            equipmentLevel = 1;
-            alert('Ai cumpărat un mixer simplu. Putem prepara mai mult aluat și mai mulți biscuiți.');
-          } else {
-            alert('Nu ai suficienți lei pentru mixer.');
+        title: 'Ce fel de ingrediente folosim?',
+        description: 'Alege cu ce vrei să faci biscuiții. Ingrediente diferite au calități și prețuri diferite.',
+        options: [
+          {
+            text: 'Ingrediente ieftine (10 lei) – biscuiții pot fi mai puțin gustoși',
+            effect: () => {
+              state.lei -= 10;
+              ingredientQuality = 1;
+              alert('Ai ales ingrediente ieftine. Biscuiții s-ar putea să nu fie la fel de buni, dar costă mai puțin.');
+            }
+          },
+          {
+            text: 'Ingrediente normale (20 lei) – echilibru între cost și gust',
+            effect: () => {
+              state.lei -= 20;
+              ingredientQuality = 2;
+              alert('Ai ales ingrediente normale. Biscuiții vor fi buni, iar costul este rezonabil.');
+            }
+          },
+          {
+            text: 'Ingrediente de calitate (30 lei) – biscuiți foarte gustoși',
+            effect: () => {
+              state.lei -= 30;
+              ingredientQuality = 3;
+              alert('Ai ales ingrediente de calitate. Biscuiții vor fi delicioși, chiar dacă ai cheltuit mai mult.');
+            }
           }
-        }
+        ]
       },
       {
-        text: 'Cuptor electric (200 lei) – coacem mulți biscuiți rapid',
-        effect: () => {
-          if (state.lei >= 200) {
-            state.lei -= 200;
-            equipmentLevel = 2;
-            alert('Ai cumpărat un cuptor electric. Vom coace multe biscuiți rapid!');
-          } else {
-            alert('Nu ai suficienți lei pentru cuptor.');
+        title: 'Ce unelte folosim?',
+        description: 'Unelte mai bune ne ajută să facem mai mulți biscuiți. Ce alegi?',
+        options: [
+          {
+            text: 'Fără unelte noi – facem puțini biscuiți',
+            effect: () => {
+              equipmentLevel = 0;
+              alert('Nu ai cumpărat unelte noi. Vom face doar câțiva biscuiți deodată.');
+            }
+          },
+          {
+            text: 'Mixer simplu (50 lei) – facem mai mult aluat',
+            effect: () => {
+              if (state.lei >= 50) {
+                state.lei -= 50;
+                equipmentLevel = 1;
+                alert('Ai cumpărat un mixer simplu. Putem prepara mai mult aluat și mai mulți biscuiți.');
+              } else {
+                alert('Nu ai suficienți lei pentru mixer.');
+              }
+            }
+          },
+          {
+            text: 'Cuptor electric (200 lei) – coacem mulți biscuiți rapid',
+            effect: () => {
+              if (state.lei >= 200) {
+                state.lei -= 200;
+                equipmentLevel = 2;
+                alert('Ai cumpărat un cuptor electric. Vom coace multe biscuiți rapid!');
+              } else {
+                alert('Nu ai suficienți lei pentru cuptor.');
+              }
+            }
           }
-        }
-      }
-    ]
-  },
-  {
-    title: 'Cât costă un biscuit?',
-    description: 'Prețul trebuie să fie potrivit pentru ca oamenii să cumpere. Ce alegi?',
-    options: [
-      {
-        text: 'Preț mic (2 lei) – vom vinde rapid, dar câștigăm puțin',
-        effect: () => {
-          priceChoice = 1;
-          alert('Ai ales un preț mic. Vom vinde repede, dar fiecare biscuite aduce puțini lei.');
-        }
+        ]
       },
       {
-        text: 'Preț mediu (5 lei) – vinde bine și câștigăm bine',
-        effect: () => {
-          priceChoice = 2;
-          alert('Ai ales un preț mediu. Biscuiții se vor vinde bine și vom câștiga frumos.');
-        }
-      },
-      {
-        text: 'Preț mare (10 lei) – puțini clienți, dar câștigăm mai mult pe bucată',
-        effect: () => {
-          priceChoice = 3;
-          alert('Ai ales un preț mare. Mai puțini oameni vor cumpăra, dar profitul pe biscuite crește.');
-        }
-      }
-    ]
-  },
-  {
-    title: 'Facem reclamă?',
-    description: 'Reclama ne poate aduce clienți noi. Cât vrei să investești?',
-    options: [
-      {
-        text: 'Fără reclamă – vin doar clienții care ne cunosc',
-        effect: () => {
-          marketingLevel = 0;
-          alert('Nu ai cheltuit pe reclamă. Oamenii care ne cunosc deja vor veni.');
-        }
-      },
-      {
-        text: 'Pliante (30 lei) – atragem câțiva clienți noi',
-        effect: () => {
-          if (state.lei >= 30) {
-            state.lei -= 30;
-            marketingLevel = 1;
-            alert('Ai tipărit pliante. Vor veni câțiva clienți noi.');
-          } else {
-            alert('Nu ai suficienți lei pentru pliante.');
+        title: 'Cât costă un biscuit?',
+        description: 'Prețul trebuie să fie potrivit pentru ca oamenii să cumpere. Ce alegi?',
+        options: [
+          {
+            text: 'Preț mic (2 lei) – vom vinde rapid, dar câștigăm puțin',
+            effect: () => {
+              priceChoice = 1;
+              alert('Ai ales un preț mic. Vom vinde repede, dar fiecare biscuite aduce puțini lei.');
+            }
+          },
+          {
+            text: 'Preț mediu (5 lei) – vinde bine și câștigăm bine',
+            effect: () => {
+              priceChoice = 2;
+              alert('Ai ales un preț mediu. Biscuiții se vor vinde bine și vom câștiga frumos.');
+            }
+          },
+          {
+            text: 'Preț mare (10 lei) – puțini clienți, dar câștigăm mai mult pe bucată',
+            effect: () => {
+              priceChoice = 3;
+              alert('Ai ales un preț mare. Mai puțini oameni vor cumpăra, dar profitul pe biscuite crește.');
+            }
           }
-        }
+        ]
       },
       {
-        text: 'Reclame online (100 lei) – atragem mulți clienți',
-        effect: () => {
-          if (state.lei >= 100) {
-            state.lei -= 100;
-            marketingLevel = 2;
-            alert('Ai plătit reclame pe internet. Mulți clienți vor afla de biscuiții tăi!');
-          } else {
-            alert('Nu ai suficienți lei pentru reclame online.');
+        title: 'Facem reclamă?',
+        description: 'Reclama ne poate aduce clienți noi. Cât vrei să investești?',
+        options: [
+          {
+            text: 'Fără reclamă – vin doar clienții care ne cunosc',
+            effect: () => {
+              marketingLevel = 0;
+              alert('Nu ai cheltuit pe reclamă. Oamenii care ne cunosc deja vor veni.');
+            }
+          },
+          {
+            text: 'Pliante (30 lei) – atragem câțiva clienți noi',
+            effect: () => {
+              if (state.lei >= 30) {
+                state.lei -= 30;
+                marketingLevel = 1;
+                alert('Ai tipărit pliante. Vor veni câțiva clienți noi.');
+              } else {
+                alert('Nu ai suficienți lei pentru pliante.');
+              }
+            }
+          },
+          {
+            text: 'Reclame online (100 lei) – atragem mulți clienți',
+            effect: () => {
+              if (state.lei >= 100) {
+                state.lei -= 100;
+                marketingLevel = 2;
+                alert('Ai plătit reclame pe internet. Mulți clienți vor afla de biscuiții tăi!');
+              } else {
+                alert('Nu ai suficienți lei pentru reclame online.');
+              }
+            }
           }
-        }
-      }
-    ]
-  },
-  {
-    title: 'Ce facem cu banii?',
-    description: 'După ce vindem biscuiți, putem alege să economisim, să reinvestim sau să cheltuim pe ceva pentru noi.',
-    options: [
-      {
-        text: 'Economisim – păstrăm banii pentru mai târziu',
-        effect: () => {
-          const gain = Math.floor(state.lei * 0.05);
-          state.lei += gain;
-          alert('Ai ales să economisești. Banii tăi vor crește puțin (cu 5%) și îi vei avea pentru mai târziu.');
-        }
+        ]
       },
       {
-        text: 'Reinvestim – cumpărăm mai multe ingrediente și unelte',
-        effect: () => {
-          alert('Ai ales să reinvestești. Folosim banii pentru a cumpăra ingrediente sau unelte ca să câștigăm mai mult în viitor.');
-        }
-      },
-      {
-        text: 'Cumpărăm o jucărie – cheltuim pentru plăcerea noastră',
-        effect: () => {
-          const spent = Math.min(20, state.lei);
-          state.lei -= spent;
-          alert('Ai ales să cumperi o jucărie. Este distractiv acum, dar ai mai puțini bani pentru afacere.');
-        }
-      }
-    ]
-  },
-  {
-    title: 'Cum ne protejăm de surprize?',
-    description: 'Uneori se întâmplă lucruri neprevăzute (ploaie, se strică cuptorul). Cum ne pregătim?',
-    options: [
-      {
-        text: 'Împrumut (100 lei) – avem bani acum, dar trebuie să dăm mai mult înapoi',
-        effect: () => {
-          loanAmount += 100;
-          state.lei += 100;
-          alert('Ai luat un împrumut. Acum ai bani, dar va trebui să îi returnezi cu dobândă.');
-        }
-      },
-      {
-        text: 'Asigurare (20 lei) – ne protejează când apar probleme',
-        effect: () => {
-          if (state.lei >= 20) {
-            state.lei -= 20;
-            hasInsurance = true;
-            alert('Ai cumpărat asigurare. Dacă se întâmplă ceva rău, nu pierzi toți banii.');
-          } else {
-            alert('Nu ai suficienți lei pentru asigurare.');
+        title: 'Ce facem cu banii?',
+        description: 'După ce vindem biscuiți, putem alege să economisim, să reinvestim sau să cheltuim pe ceva pentru noi.',
+        options: [
+          {
+            text: 'Economisim – păstrăm banii pentru mai târziu',
+            effect: () => {
+              const gain = Math.floor(state.lei * 0.05);
+              state.lei += gain;
+              alert('Ai ales să economisești. Banii tăi vor crește puțin (cu 5%) și îi vei avea pentru mai târziu.');
+            }
+          },
+          {
+            text: 'Reinvestim – cumpărăm mai multe ingrediente și unelte',
+            effect: () => {
+              alert('Ai ales să reinvestești. Folosim banii pentru a cumpăra ingrediente sau unelte ca să câștigăm mai mult în viitor.');
+            }
+          },
+          {
+            text: 'Cumpărăm o jucărie – cheltuim pentru plăcerea noastră',
+            effect: () => {
+              const spent = Math.min(20, state.lei);
+              state.lei -= spent;
+              alert('Ai ales să cumperi o jucărie. Este distractiv acum, dar ai mai puțini bani pentru afacere.');
+            }
           }
-        }
+        ]
       },
       {
-        text: 'Nu facem nimic – riscăm să pierdem bani',
-        effect: () => {
-          alert('Nu ai ales protecție. Dacă apare un eveniment neprevăzut, poți pierde bani.');
-        }
+        title: 'Cum ne protejăm de surprize?',
+        description: 'Uneori se întâmplă lucruri neprevăzute (ploaie, se strică cuptorul). Cum ne pregătim?',
+        options: [
+          {
+            text: 'Împrumut (100 lei) – avem bani acum, dar trebuie să dăm mai mult înapoi',
+            effect: () => {
+              loanAmount += 100;
+              state.lei += 100;
+              alert('Ai luat un împrumut. Acum ai bani, dar va trebui să îi returnezi cu dobândă.');
+            }
+          },
+          {
+            text: 'Asigurare (20 lei) – ne protejează când apar probleme',
+            effect: () => {
+              if (state.lei >= 20) {
+                state.lei -= 20;
+                hasInsurance = true;
+                alert('Ai cumpărat asigurare. Dacă se întâmplă ceva rău, nu pierzi toți banii.');
+              } else {
+                alert('Nu ai suficienți lei pentru asigurare.');
+              }
+            }
+          },
+          {
+            text: 'Nu facem nimic – riscăm să pierdem bani',
+            effect: () => {
+              alert('Nu ai ales protecție. Dacă apare un eveniment neprevăzut, poți pierde bani.');
+            }
+          }
+        ]
       }
-    ]
-  }
-];
+    ];
 
-// Afișează un ecran de decizie financiară după servire
-function showFinancialDecision() {
-  clearGame();
-  // dacă am parcurs toate deciziile, revenim la meniu și pregătim o nouă comandă
-  if (financialStep >= financialDecisions.length) {
-    financialStep = 0;
-    showOrderScreen();
-    return;
-  }
-  const dec = financialDecisions[financialStep];
-  const root = document.getElementById('cookie-game');
-  const screen = document.createElement('div');
-  screen.className = 'screen active-screen scene-shop';
-  const title = document.createElement('h2');
-  title.textContent = dec.title;
-  screen.appendChild(title);
-  const desc = document.createElement('p');
-  desc.textContent = dec.description;
-  screen.appendChild(desc);
-  // container pentru butoane
-  dec.options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.textContent = opt.text;
-    btn.addEventListener('click', () => {
-      opt.effect();
-      updateLeiDisplay();
-      saveState(state);
-      // trecem la următoarea decizie
-      financialStep++;
-      showFinancialDecision();
-    });
-    screen.appendChild(btn);
-  });
-  screen.appendChild(createBanisor('Alege una dintre opțiuni pentru a învăța despre bani!'));
-  root.appendChild(screen);
-}
+    // Afișează un ecran de decizie financiară după servire
+    function showFinancialDecision() {
+      clearGame();
+      // dacă am parcurs toate deciziile, revenim la meniu și pregătim o nouă comandă
+      if (financialStep >= financialDecisions.length) {
+        financialStep = 0;
+        showOrderScreen();
+        return;
+      }
+      const dec = financialDecisions[financialStep];
+      const root = document.getElementById('cookie-game');
+      const screen = document.createElement('div');
+      screen.className = 'screen active-screen scene-shop';
+      const title = document.createElement('h2');
+      title.textContent = dec.title;
+      screen.appendChild(title);
+      const desc = document.createElement('p');
+      desc.textContent = dec.description;
+      screen.appendChild(desc);
+      // container pentru butoane
+      dec.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.textContent = opt.text;
+        btn.addEventListener('click', () => {
+          opt.effect();
+          updateLeiDisplay();
+          saveState(state);
+          // trecem la următoarea decizie
+          financialStep++;
+          showFinancialDecision();
+        });
+        screen.appendChild(btn);
+      });
+      screen.appendChild(createBanisor('Alege una dintre opțiuni pentru a învăța despre bani!'));
+      root.appendChild(screen);
+    }
     function updateLeiDisplay() {
       document.getElementById('lei-count').textContent = state.lei;
     }
@@ -664,19 +705,85 @@ function showFinancialDecision() {
       });
       document.body.appendChild(bar);
     }
+
+    // --- Nou: constructorul SVG pentru Banisor ---
+    function buildBanisorSprite(sizePx = 80) {
+      const wrap = document.createElement('div');
+      wrap.className = 'banisor-sprite';
+      wrap.style.width = sizePx + 'px';
+      wrap.style.height = sizePx + 'px';
+      wrap.innerHTML = `
+      <svg viewBox="0 0 200 200" aria-label="Banisor animat" role="img">
+        <ellipse cx="100" cy="185" rx="45" ry="10" fill="#d3b37a" opacity=".35"/>
+        <g fill="#f0a82a" stroke="#c67a12" stroke-width="4">
+          <path d="M75 160 q-8 12 8 18 h18 q10-2 6-10 q-6-14-32-8z"/>
+          <path d="M127 160 q8 12-8 18 h-18 q-10-2-6-10 q6-14 32-8z"/>
+        </g>
+        <g fill="#f0a82a" stroke="#c67a12" stroke-width="6" class="hand-wave">
+          <path d="M150 110 q25 5 25 25" fill="none"/>
+          <circle cx="175" cy="135" r="14" />
+          <circle cx="165" cy="128" r="6" />
+          <circle cx="184" cy="142" r="6" />
+        </g>
+        <g fill="#f0a82a" stroke="#c67a12" stroke-width="6">
+          <path d="M50 110 q-25 5 -25 25" fill="none"/>
+          <circle cx="25" cy="135" r="14" />
+          <circle cx="35" cy="128" r="6" />
+          <circle cx="16" cy="142" r="6" />
+        </g>
+        <defs>
+          <radialGradient id="g1" cx="35%" cy="35%">
+            <stop offset="0%"  stop-color="#ffe58a"/>
+            <stop offset="60%" stop-color="#ffd053"/>
+            <stop offset="100%" stop-color="#f2a62b"/>
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="68" fill="url(#g1)" stroke="#c67a12" stroke-width="8"/>
+        <circle cx="100" cy="100" r="56" fill="none" stroke="#ffde82" stroke-width="10" opacity=".9"/>
+        <g stroke="#c67a12" stroke-width="4" opacity=".6">
+          <line x1="155" y1="60"  x2="165" y2="62"/>
+          <line x1="160" y1="75"  x2="170" y2="78"/>
+          <line x1="164" y1="92"  x2="175" y2="95"/>
+          <line x1="165" y1="110" x2="176" y2="112"/>
+          <line x1="160" y1="128" x2="170" y2="130"/>
+        </g>
+        <circle cx="75" cy="112" r="9" fill="#f2a035" opacity=".8"/>
+        <circle cx="125" cy="112" r="9" fill="#f2a035" opacity=".8"/>
+        <g class="eye">
+          <circle cx="80" cy="95" r="14" fill="#fff"/>
+          <circle cx="80" cy="98" r="7"  fill="#2a2a2a"/>
+          <circle cx="76" cy="92" r="3.5" fill="#fff"/>
+        </g>
+        <g class="eye">
+          <circle cx="120" cy="95" r="14" fill="#fff"/>
+          <circle cx="120" cy="98" r="7"  fill="#2a2a2a"/>
+          <circle cx="116" cy="92" r="3.5" fill="#fff"/>
+        </g>
+        <path d="M68 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/>
+        <path d="M108 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="100" cy="108" r="6" fill="#ffcf59" stroke="#c67a12" stroke-width="2"/>
+        <path d="M85 120 q15 18 30 0 q-7 18-30 0z" fill="#d3542f" stroke="#a63b1c" stroke-width="3"/>
+        <path d="M96 132 q7 6 14 0" fill="none" stroke="#e97b57" stroke-width="3" stroke-linecap="round"/>
+        <g class="hat">
+          <ellipse cx="100" cy="52" rx="46" ry="12" fill="#1e8da1" stroke="#0f5e6b" stroke-width="5"/>
+          <path d="M65 45 q35-25 70 0 v22 h-70z" fill="#1da0b4" stroke="#0f5e6b" stroke-width="5" />
+          <path d="M60 55 q40-18 80 0" fill="none" stroke="#147a8a" stroke-width="5" stroke-linecap="round"/>
+        </g>
+      </svg>`;
+      return wrap;
+    }
+
     // Mascota Banisor
     function createBanisor(text) {
       const cont = document.createElement('div');
       cont.className = 'banisor';
-      const img = document.createElement('img');
-      img.src = 'banisor_character.png';
-      img.alt = 'Banisor';
-      cont.appendChild(img);
+      cont.appendChild(buildBanisorSprite(80));
       const msg = document.createElement('p');
       msg.textContent = text;
       cont.appendChild(msg);
       return cont;
     }
+
     // Afișăm ecranul de comandă
     function showOrderScreen() {
       clearGame();
@@ -730,13 +837,11 @@ function showFinancialDecision() {
       // Banisor plasat după tejghea (fără mesaj lung)
       const ban = document.createElement('div');
       ban.className = 'banisor-counter';
-      const bImg = document.createElement('img');
-      bImg.src = 'banisor_character.png';
-      bImg.alt = 'Banisor';
-      ban.appendChild(bImg);
+      ban.appendChild(buildBanisorSprite(100));
       screen.appendChild(ban);
       root.appendChild(screen);
     }
+
     // Etapa de amestecare
     function showMixScreen() {
       clearGame();
@@ -850,80 +955,81 @@ function showFinancialDecision() {
       screen.appendChild(createBanisor('Adaugă făină, zahăr, lapte și, dacă dorești, cacao sau nucă de cocos.'));
       root.appendChild(screen);
     }
+
     // Coacerea (CU ANIMAȚIE NOUĂ)
-function showBakeScreen() {
-  clearGame();
-  renderStationBar('Coacere');
-  const root = document.getElementById('cookie-game');
-  const screen = document.createElement('div');
-  // Folosește scena de bucătărie pentru coacere
-  screen.className = 'screen active-screen scene-kitchen';
-  
-  const title = document.createElement('h2');
-  title.textContent = 'Coacerea biscuitului';
-  screen.appendChild(title);
+    function showBakeScreen() {
+      clearGame();
+      renderStationBar('Coacere');
+      const root = document.getElementById('cookie-game');
+      const screen = document.createElement('div');
+      // Folosește scena de bucătărie pentru coacere
+      screen.className = 'screen active-screen scene-kitchen';
+      
+      const title = document.createElement('h2');
+      title.textContent = 'Coacerea biscuitului';
+      screen.appendChild(title);
 
-  // --- Noul container pentru animația cuptorului ---
-  const ovenContainer = document.createElement('div');
-  ovenContainer.className = 'oven-animation-container';
+      // --- Noul container pentru animația cuptorului ---
+      const ovenContainer = document.createElement('div');
+      ovenContainer.className = 'oven-animation-container';
 
-  // Imaginea cuptorului: pornim cu varianta cu ușa deschisă
-  const ovenImg = document.createElement('img');
-  ovenImg.src = 'oven_open.png';
-  ovenImg.alt = 'Cuptor';
-  ovenImg.className = 'oven-image';
-  ovenContainer.appendChild(ovenImg);
+      // Imaginea cuptorului: pornim cu varianta cu ușa deschisă
+      const ovenImg = document.createElement('img');
+      ovenImg.src = 'oven_open.png';
+      ovenImg.alt = 'Cuptor';
+      ovenImg.className = 'oven-image';
+      ovenContainer.appendChild(ovenImg);
 
-  // Tava care va fi animată
-  const tray = document.createElement('div');
-  tray.className = 'baking-tray';
-  
-  // Imaginea biscuitului de pe tavă
-  const cookieImg = document.createElement('img');
-  // Păstrăm logica pentru a alege imaginea corectă a biscuitului
-  let bakeSrc = 'cookie_bake_plain.png';
-  if (currentExtras.cacao) bakeSrc = 'cookie_bake_cacao.png';
-  if (currentExtras.cocos) bakeSrc = 'cookie_bake_cocos.png';
-  cookieImg.src = bakeSrc;
-  cookieImg.alt = 'Biscuite pe tavă';
-  cookieImg.className = 'cookie-on-tray';
-  tray.appendChild(cookieImg);
-  ovenContainer.appendChild(tray);
+      // Tava care va fi animată
+      const tray = document.createElement('div');
+      tray.className = 'baking-tray';
+      
+      // Imaginea biscuitului de pe tavă
+      const cookieImg = document.createElement('img');
+      // Păstrăm logica pentru a alege imaginea corectă a biscuitului
+      let bakeSrc = 'cookie_bake_plain.png';
+      if (currentExtras.cacao) bakeSrc = 'cookie_bake_cacao.png';
+      if (currentExtras.cocos) bakeSrc = 'cookie_bake_cocos.png';
+      cookieImg.src = bakeSrc;
+      cookieImg.alt = 'Biscuite pe tavă';
+      cookieImg.className = 'cookie-on-tray';
+      tray.appendChild(cookieImg);
+      ovenContainer.appendChild(tray);
 
-  screen.appendChild(ovenContainer);
-  // --- Sfârșitul containerului de animație ---
+      screen.appendChild(ovenContainer);
+      // --- Sfârșitul containerului de animație ---
 
-  // bară de progres pentru coacere
-  const prog = document.createElement('div');
-  prog.className = 'progress-container';
-  const bar = document.createElement('div');
-  bar.className = 'progress-bar';
-  prog.appendChild(bar);
-  screen.appendChild(prog);
-  
-  screen.appendChild(createBanisor('Așteaptă puțin până se coace biscuitele.'));
-  root.appendChild(screen);
-  
-  let elapsed = 0;
-  // Timer-ul de 3 secunde este păstrat pentru a se sincroniza cu animația
-  const timer = setInterval(() => {
-    elapsed += 100;
-    bar.style.width = Math.min(100, (elapsed / 3000) * 100) + '%';
-    if (elapsed >= 3000) {
-      clearInterval(timer);
-      showDecorateScreen();
+      // bară de progres pentru coacere
+      const prog = document.createElement('div');
+      prog.className = 'progress-container';
+      const bar = document.createElement('div');
+      bar.className = 'progress-bar';
+      prog.appendChild(bar);
+      screen.appendChild(prog);
+      
+      screen.appendChild(createBanisor('Așteaptă puțin până se coace biscuitele.'));
+      root.appendChild(screen);
+      
+      let elapsed = 0;
+      // Timer-ul de 3 secunde este păstrat pentru a se sincroniza cu animația
+      const timer = setInterval(() => {
+        elapsed += 100;
+        bar.style.width = Math.min(100, (elapsed / 3000) * 100) + '%';
+        if (elapsed >= 3000) {
+          clearInterval(timer);
+          showDecorateScreen();
+        }
+      }, 100);
+
+      // Schimbăm imaginea cuptorului pentru a simula închiderea și deschiderea ușii
+      // Ușa se închide la 0.6s după start (20% din 3s), apoi se redeschide către final
+      setTimeout(() => { ovenImg.src = 'oven_closed.png'; }, 600);
+      setTimeout(() => { ovenImg.src = 'oven_open.png'; }, 2400);
+
+      // Controlăm vizibilitatea tăvii: dispare când ușa este închisă și reapare când ușa se redeschide
+      setTimeout(() => { tray.style.opacity = '0'; }, 600);
+      setTimeout(() => { tray.style.opacity = '1'; }, 2400);
     }
-  }, 100);
-
-  // Schimbăm imaginea cuptorului pentru a simula închiderea și deschiderea ușii
-  // Ușa se închide la 0.6s după start (20% din 3s), apoi se redeschide către final
-  setTimeout(() => { ovenImg.src = 'oven_closed.png'; }, 600);
-  setTimeout(() => { ovenImg.src = 'oven_open.png'; }, 2400);
-
-  // Controlăm vizibilitatea tăvii: dispare când ușa este închisă și reapare când ușa se redeschide
-  setTimeout(() => { tray.style.opacity = '0'; }, 600);
-  setTimeout(() => { tray.style.opacity = '1'; }, 2400);
-}
 
     // Decorarea
     function showDecorateScreen() {
@@ -1008,6 +1114,7 @@ function showBakeScreen() {
       screen.appendChild(createBanisor('Decorează cu grijă biscuitele. Folosește cinci bucăți.'));
       root.appendChild(screen);
     }
+
     // Servirea
     function showServeScreen() {
       clearGame();
@@ -1053,6 +1160,7 @@ function showBakeScreen() {
         showFinancialDecision();
       }, 500); // lăsăm puțin timp pentru confetti
     }
+
     // Confetti
     function createConfetti() {
       const colors = ['#f9c74f', '#f9844a', '#90be6d', '#fda65f', '#87b6e5', '#f27ba5'];
@@ -1071,6 +1179,7 @@ function showBakeScreen() {
         if (document.body.contains(container)) document.body.removeChild(container);
       }, 3000);
     }
+
     // Pornim jocul după încărcarea paginii
     window.addEventListener('DOMContentLoaded', () => {
       updateLeiDisplay();
