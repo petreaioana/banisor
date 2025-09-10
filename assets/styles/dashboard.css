@@ -1,0 +1,23 @@
+.layout{display:grid; grid-template-columns:310px 1fr 320px; gap:12px; padding:12px; min-height:calc(100vh - 56px)}
+aside{background:rgba(255,255,255,.85); border:2px solid var(--frame); border-radius:12px; padding:12px}
+#center{position:relative; border:2px solid var(--frame); border-radius:12px; background:var(--paper); overflow:hidden}
+
+.scene{position:absolute; inset:0; background:url('images/shop_background.png') center/cover no-repeat}
+.scene.scene-shop{background-image:url('images/shop_background.png')}
+.order-ticket{position:absolute; top:.5rem; right:.5rem; background:var(--paper); border:2px solid var(--frame); padding:.4rem .7rem; border-radius:8px; font-weight:bold}
+
+/* Banisor (opțional, păstrat) */
+.banisor-counter{position:absolute; bottom:1rem; left:1rem; text-align:center}
+.banisor-sprite{width:120px;height:120px;display:inline-block}
+.banisor-sprite svg{width:100%;height:100%;display:block}
+.banisor-sprite .hand-wave{transform-box:fill-box;transform-origin:left center;animation:hand-wave 2s ease-in-out infinite}
+@keyframes hand-wave{0%,100%{transform:rotate(0)}25%{transform:rotate(18deg)}50%{transform:rotate(-10deg)}75%{transform:rotate(14deg)}}
+.banisor-sprite .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}94%{transform:scaleY(.05)}96%{transform:scaleY(1)}}
+.banisor-sprite .hat{transform-box:fill-box;transform-origin:center;animation:hat-bob 2s ease-in-out infinite}
+@keyframes hat-bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.5px) rotate(-3deg)}}
+
+/* Station bar jos */
+#stationbar{position:fixed; bottom:0; left:0; width:100%; display:flex; justify-content:center; gap:1rem; padding:.4rem; background:#333; color:#fff; font-size:.9rem}
+#stationbar .station{padding:.3rem .9rem; background:#555; border-radius:6px; color:#fff; text-decoration:none}
+#stationbar .station.active{background:var(--brand); color:#000}

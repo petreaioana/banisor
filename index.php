@@ -36,22 +36,22 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FinKids Tycoon — COMBINED</title>
-  <link rel="preload" as="image" href="shop_background.png" />
-  <link rel="preload" as="image" href="kitchen_background.png" />
-  <link rel="preload" as="image" href="worktop_background.png" />
-  <link rel="stylesheet" href="combined.css" />
+  <title>FinKids Tycoon — Dashboard</title>
+
+  <link rel="preload" as="image" href="images/shop_background.png" />
+  <link rel="stylesheet" href="assets/styles/base.css" />
+  <link rel="stylesheet" href="assets/styles/dashboard.css" />
   <script>
     window.__SERVER_STATE__ = <?php echo json_encode($serverState, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);?>;
   </script>
-  <script defer src="combined.js"></script>
+  <!-- Module: autosim engine (importă state.js) -->
+  <script type="module" src="assets/js/dashboard/engine.js" defer></script>
   <noscript><style>main{display:none}</style></noscript>
 </head>
 <body>
-  <!-- Top control bar: time, pause, speed, cash, stock, reputation -->
   <header id="topbar">
     <div class="left">
-      <span class="brand">🍪 FinKids Tycoon</span>
+      <a class="brand" href="/">🍪 FinKids Tycoon</a>
       <span class="sep">•</span>
       <span id="day-clock">Ziua <b id="top-day">1</b> · <span id="top-time">08:00</span></span>
       <button id="btn-pause" class="btn">⏸️ Pauză</button>
@@ -72,10 +72,11 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       ⭐ R: <b id="top-rep">1.00</b>
       <span class="sep">•</span>
       ⚡ Boost: <b id="top-boost">0%</b>
+      <span class="sep">•</span>
+      <a class="btn" href="game.html">🎮 Joc manual</a>
     </div>
   </header>
 
-  <!-- Main layout: left controls (pausable), center scene, right metrics -->
   <div class="layout">
     <aside id="left-controls">
       <h3>Parametri zi (ajustabili în pauză)</h3>
@@ -120,30 +121,11 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       </div>
       <div class="hint">Orice schimbare devine activă după ce reiei simularea.</div>
       <hr>
-      <button id="btn-arcade" class="btn wide">🎮 Arcade (manual biscuit)</button>
-      <div class="small muted">Finalizează cu succes mini-jocul pentru a primi un ⚡ boost temporar la calitate & coadă în auto-sim.</div>
-      <div class="row"></div>
-      <button id="btn-prep" class="btn wide">Preparare manuală (ingrediente)</button>
+      <div class="small muted">Jocul manual este într-o pagină separată. Niciun modal nu se mai deschide automat.</div>
     </aside>
 
     <main id="center">
-      <!-- Scene stack: background artwork from joculet 1 -->
       <div id="scene" class="scene scene-shop">
-        <div class="overlay-intro" id="intro">
-          <div class="modal">
-            <h2>Bine ai venit!</h2>
-            <p>Acesta este modul COMBINED: un simulator care rulează non-stop pe fundal (auto-sim) + un mini-joc manual (arcade) ce îți dă boost.</p>
-            <ul>
-              <li>Apasă <b>Pauză</b> ca să ajustezi parametrii.</li>
-              <li>Folosește <b>Viteză</b> pentru a comprima timpul.</li>
-              <li>🎮 Arcade îți oferă <b>boost</b> ce crește <i>Q</i> și reduce <i>W</i> în auto-sim.</li>
-            </ul>
-            <div class="footer">
-              <label><input id="chk-show-help" checked type="checkbox"> Arată sfaturi la pornire</label>
-              <button id="btn-start" class="btn">Start</button>
-            </div>
-          </div>
-        </div>
         <div id="ticker" class="order-ticket">Auto-sim activ…</div>
         <div id="banisor-corner" class="banisor-counter"></div>
       </div>
@@ -175,68 +157,12 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
     </aside>
   </div>
 
-  <!-- Arcade modal (manual mini-game) -->
-  <div id="arcade-modal" class="modal-overlay" hidden>
-    <div class="modal wide">
-      <h2>🎮 Arcade — Coace perfect tava!</h2>
-      <p>Așteaptă ca bara să intre în zona verde și apasă <b>SPAȚIU</b> pentru a scoate tava. Reușita îți dă ⚡ boost pentru auto-sim.</p>
-      <div id="arcade-root">
-        <div class="oven-animation-container">
-          <img class="oven-image" id="arc-oven" src="oven_open.png" alt="Cuptor">
-          <div class="baking-tray" id="arc-tray">
-            <img class="cookie-on-tray" id="arc-cookie" src="cookie_bake_plain.png" alt="Biscuite">
-          </div>
-        </div>
-        <div class="progress-container"><div class="progress-bar" id="arc-bar"></div></div>
-        <div class="hit-window"><span></span></div>
-      </div>
-      <div class="footer">
-        <button id="btn-arc-close" class="btn secondary">Închide</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Prep modal (ingredient-based manual prep) -->
-  <div id="prep-modal" class="modal-overlay" hidden>
-    <div class="modal wide">
-      <h2>Preparare manuală — Biscuiți cu ingrediente</h2>
-      <p>Alege ingrediente și “coace” tava. Vei primi stoc proaspăt și un mic boost la calitate.</p>
-      <div id="prep-root" class="prep-root">
-        <div id="prep-palette" class="prep-palette"></div>
-        <div class="prep-work">
-          <div class="cookie-stage">
-            <img id="prep-cookie" class="prep-cookie" src="cookie_bake_plain.png" alt="Bază biscuite">
-            <div id="prep-toppings" class="prep-toppings"></div>
-          </div>
-        </div>
-        <div class="prep-summary">
-          <div class="summary-box">
-            <h3>Rețetă curentă</h3>
-            <ul id="prep-list" class="prep-list"></ul>
-          </div>
-          <div class="footer">
-            <div>
-              <button id="btn-prep-reset" class="btn secondary">Reset</button>
-            </div>
-            <div>
-              <button id="btn-prep-bake" class="btn">Coace</button>
-              <button id="btn-prep-close" class="btn secondary">Închide</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <footer id="stationbar">
     <div class="station active">Auto-Sim</div>
+    <a class="station" href="game.html">Joc Manual</a>
     <div class="station">Raport</div>
-    <div class="station">Magazine</div>
   </footer>
 
-  <noscript>
-    Este nevoie de JavaScript pentru a rula simulatorul.
-  </noscript>
+  <noscript>Este nevoie de JavaScript pentru a rula simulatorul.</noscript>
 </body>
 </html>
-

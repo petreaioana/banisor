@@ -1,0 +1,39 @@
+:root{
+  --bg:#fdf5e6; --ink:#222; --brand:#f5a623; --frame:#e6a937; --paper:#fffbee;
+  --muted:#6b6b6b; --ok:#1a8d2b; --warn:#b35b0e; --bad:#b3260e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Comic Sans MS", system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--ink)}
+
+h3{margin:6px 0 8px}
+.row{display:flex; gap:8px; align-items:center; margin:.35rem 0; flex-wrap:wrap}
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+label{font-size:.95rem}
+input[type="number"], input[type="time"], input[type="range"], select{padding:.35rem .5rem; border:1px solid #d3b37a; border-radius:8px; background:#fff}
+.btn{background:var(--brand); border:0; color:#000; padding:.45rem .7rem; border-radius:10px; cursor:pointer}
+.btn:hover{filter:brightness(.95)}
+.btn.secondary{background:#ffe9b5}
+.btn.wide{width:100%}
+.hint{font-size:.85rem; color:#444}
+.small{font-size:.9rem}
+.muted{color:#666}
+hr{border:0;border-top:1px dashed #d3b37a;margin:.6rem 0}
+
+/* Topbar */
+#topbar{position:sticky; top:0; z-index:1000; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:.5rem 1rem; background:#fdd26e; border-bottom:2px solid var(--frame)}
+#topbar .left{display:flex; align-items:center; gap:10px}
+#topbar .right{display:flex; align-items:center; gap:10px; font-weight:600}
+#topbar .brand{font-weight:700; text-decoration:none; color:inherit}
+#topbar .sep{opacity:.6}
+#topbar .speed{display:flex; align-items:center; gap:6px}
+.speed-btn{background:#fff3c8}
+.speed-btn.active{outline:2px solid #000}
+
+/* Bars */
+.bar{height:12px; background:#eee; border-radius:6px; overflow:hidden; border:1px solid #ccc}
+.bar>span{display:block;height:100%;background:#69c56f}
+.bar.warn>span{background:#f2b75f}
+.bar.bad>span{background:#e06a5f}
+.panel.soft{background:#fffbee;border:1px dashed var(--frame);border-radius:10px;padding:8px}
+.row.tight{justify-content:space-between}
