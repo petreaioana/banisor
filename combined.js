@@ -264,7 +264,15 @@
 
   // ---------- Arcade Mini‑Game ----------
   let arcadeRunning=false, arcadeTimer=null, arcElapsed=0;
-  function openArcade(){ modalArc.hidden=false; arcadeRunning=true; arcElapsed=0; arcBar.style.width='0%'; arcOven.src='oven_open.png'; arcTray.style.opacity='1'; document.addEventListener('keydown', onArcadeKey); // animation keyframes are in CSS
+  function anyModalOpen(){ return (modalArc && !modalArc.hidden) || (modalPrep && !modalPrep.hidden); }
+  function closeAllModals(){
+    if(modalArc && !modalArc.hidden){ modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); }
+    if(modalPrep && !modalPrep.hidden){ modalPrep.hidden=true; }
+  }
+  function openArcade(){
+    // ensure only one modal is open at a time
+    if(modalPrep && !modalPrep.hidden) modalPrep.hidden=true;
+    modalArc.hidden=false; arcadeRunning=true; arcElapsed=0; arcBar.style.width='0%'; arcOven.src='oven_open.png'; arcTray.style.opacity='1'; document.addEventListener('keydown', onArcadeKey); // animation keyframes are in CSS
     setTimeout(()=>{ arcOven.src='oven_closed.png'; }, 600); setTimeout(()=>{ arcOven.src='oven_open.png'; }, 2400);
     arcadeTimer=setInterval(()=>{ arcElapsed+=100; arcBar.style.width = Math.min(100,(arcElapsed/3000)*100)+'%'; if(arcElapsed>=3000) { finishArcade(1.0); } },100); }
   function onArcadeKey(e){ if(!arcadeRunning) return; if(e.code==='Space'){ // 55%±7%
@@ -281,6 +289,8 @@
 
   // ---------- Prep (ingredients) ----------
   function openPrep(){
+    // ensure only one modal is open at a time
+    if(modalArc && !modalArc.hidden){ modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); }
     modalPrep.hidden=false;
     if(prepPalette && prepPalette.childElementCount===0){ buildPrepPalette(); }
     resetPrep(false);
@@ -393,6 +403,10 @@
   btnPrepClose?.addEventListener('click', ()=> closePrep());
   btnPrepReset?.addEventListener('click', ()=> resetPrep());
   btnPrepBake?.addEventListener('click', ()=> bakePrep());
+  // ESC closes any open modal (but we never auto-open)
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='Escape') closeAllModals();
+  });
 
   // ---------- Start engine ----------
   setPaused(false); // start running
