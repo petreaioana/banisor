@@ -1,7 +1,13 @@
+/* ========== UnificareExport | combined.js ========== */
+
 (()=>{
+  'use strict';
+
   // ---------- Utilities ----------
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const fmt=(n,d=2)=> (Math.round(Number(n)*Math.pow(10,d))/Math.pow(10,d)).toFixed(d);
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
 
   // ---------- Persistence ----------
   function loadState(){
@@ -34,7 +40,6 @@
       today:null
     };
     const base = local ? Object.assign(def, local) : def;
-    // Carry server cash up if larger
     const serverLei = server && typeof server.lei==='number' ? server.lei : 0; if (serverLei > (base.cash||0)) base.cash = serverLei;
     return base;
   }
@@ -48,13 +53,13 @@
 
   // ---------- Global State & DOM ----------
   let S = loadState();
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
 
   // Topbar elements
   const elDay=$('#top-day'), elTime=$('#top-time'), elCash=$('#top-cash'), elStock=$('#top-stock'), elRep=$('#top-rep'), elBoost=$('#top-boost');
   const btnPause=$('#btn-pause');
   const speedBtns=$$('.speed-btn');
+  const elBrand=$('#topbar .brand');
+  const btnIntro=$('#btn-intro'); // optional, dacă îl adaugi în layout
 
   // Controls
   const inpPrice=$('#inp-price'), rngPrice=$('#rng-price'), inpLot=$('#inp-lot'), inpHHs=$('#inp-hh-start'), inpHHe=$('#inp-hh-end'), inpHHd=$('#inp-hh-disc');
@@ -89,6 +94,34 @@
   const ticker=$('#ticker');
   const banCorner=$('#banisor-corner');
 
+  // ---------- Modal Manager (nou, fără conflicte) ----------
+  const Modal={
+    open(el){
+      if(!el) return;
+      this.closeAll();
+      el.hidden=false;
+      el.setAttribute('aria-modal','true');
+      el.setAttribute('role','dialog');
+      document.body.dataset.modalOpen='1';
+    },
+    close(el){
+      if(!el) return;
+      el.hidden=true;
+      el.removeAttribute('aria-modal');
+      el.removeAttribute('role');
+      delete document.body.dataset.modalOpen;
+    },
+    closeAll(){
+      [modalArc, modalPrep, intro].forEach(m => { if(m && !m.hidden){ this.close(m); } });
+      // asigurare: oprim timerul de arcade dacă era în curs
+      arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey);
+    },
+    anyOpen(){ return [modalArc, modalPrep, intro].some(m=>m && !m.hidden); }
+  };
+
+  // Siguranță: la load forțăm toate modalele pe hidden (NU deschidem nimic)
+  [modalArc, modalPrep, intro].forEach(m=>{ if(m){ m.hidden=true; } });
+
   // ---------- Constants ----------
   const ECON={ F_base:120, C0:0.50, epsilon:1.6, alpha:0.75, beta:0.50, kappa:0.60, delta:0.10, Wmax:6, tau:3, rho:0.75, gammaSalvage:0.20 };
   const DAY_MINUTES=8*60; // 8h workday
@@ -114,40 +147,41 @@
   function ageAndExpire(){ const expired={}; const L=S.products.croissant.shelfLifeDays; for(const k of Object.keys(S.products)){ const p=S.products[k]; p.stock.forEach(l=>l.age++); const keep=[], exp=[]; p.stock.forEach(l=>{ if(l.age>=L) exp.push(l); else keep.push(l); }); p.stock=keep; expired[k]=exp; } return expired; }
 
   // ---------- UI Setters ----------
-  function refreshTop(){ elDay.textContent=String(S.day); elTime.textContent=fmtTime(S.timeMin); elCash.textContent=Math.round(S.cash); elStock.textContent=totalStock('croissant'); elRep.textContent=S.reputation.toFixed(2); elBoost.textContent=Math.round(S.boost.percent)+'%'; }
+  function refreshTop(){
+    if(elDay) elDay.textContent=String(S.day);
+    if(elTime) elTime.textContent=fmtTime(S.timeMin);
+    if(elCash) elCash.textContent=Math.round(S.cash);
+    if(elStock) elStock.textContent=totalStock('croissant');
+    if(elRep) elRep.textContent=S.reputation.toFixed(2);
+    if(elBoost) elBoost.textContent=Math.round(S.boost.percent)+'%';
+  }
   function fmtTime(min){ const m=clamp(min,0,DAY_MINUTES); const H=8+Math.floor(m/60), M=m%60; return (H<10?'0':'')+H+':' + (M<10?'0':'')+M; }
   function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
-    barQ.style.width = Math.round(clamp(Q,0,1)*100)+'%';
-    barW.style.width = Math.round(clamp(W/ECON.Wmax,0,1)*100)+'%';
-    barC.style.width = Math.round(clamp(C,0,0.95)*100)+'%';
-    barN.style.width = Math.round(clamp(N/ (ECON.F_base*1.5) ,0,1)*100)+'%';
-    mSold.textContent=String(sold);
-    mRev.textContent=fmt(rev,0);
-    mProf.textContent=fmt(profit,0);
+    if(barQ) barQ.style.width = Math.round(clamp(Q,0,1)*100)+'%';
+    if(barW) barW.style.width = Math.round(clamp(W/ECON.Wmax,0,1)*100)+'%';
+    if(barC) barC.style.width = Math.round(clamp(C,0,0.95)*100)+'%';
+    if(barN) barN.style.width = Math.round(clamp(N/ (ECON.F_base*1.5) ,0,1)*100)+'%';
+    if(mSold) mSold.textContent=String(sold);
+    if(mRev) mRev.textContent=fmt(rev,0);
+    if(mProf) mProf.textContent=fmt(profit,0);
   }
 
   function buildBanisorSprite(sizePx=120){ const wrap=document.createElement('div'); wrap.className='banisor-sprite'; wrap.style.width=sizePx+'px'; wrap.style.height=sizePx+'px'; wrap.innerHTML=`<svg viewBox="0 0 200 200" aria-label="Banisor" role="img"><ellipse cx="100" cy="185" rx="45" ry="10" fill="#d3b37a" opacity=".35"/><g fill="#f0a82a" stroke="#c67a12" stroke-width="4"><path d="M75 160 q-8 12 8 18 h18 q10-2 6-10 q-6-14-32-8z"/><path d="M127 160 q8 12-8 18 h-18 q-10-2-6-10 q6-14 32-8z"/></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6" class="hand-wave"><path d="M150 110 q25 5 25 25" fill="none"/><circle cx="175" cy="135" r="14" /><circle cx="165" cy="128" r="6" /><circle cx="184" cy="142" r="6" /></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6"><path d="M50 110 q-25 5 -25 25" fill="none"/><circle cx="25" cy="135" r="14" /><circle cx="35" cy="128" r="6" /><circle cx="16" cy="142" r="6" /></g><defs><radialGradient id="g1" cx="35%" cy="35%"><stop offset="0%" stop-color="#ffe58a"/><stop offset="60%" stop-color="#ffd053"/><stop offset="100%" stop-color="#f2a62b"/></radialGradient></defs><circle cx="100" cy="100" r="68" fill="url(#g1)" stroke="#c67a12" stroke-width="8"/><circle cx="100" cy="100" r="56" fill="none" stroke="#ffde82" stroke-width="10" opacity=".9"/><g stroke="#c67a12" stroke-width="4" opacity=".6"><line x1="155" y1="60"  x2="165" y2="62"/><line x1="160" y1="75"  x2="170" y2="78"/><line x1="164" y1="92"  x2="175" y2="95"/><line x1="165" y1="110" x2="176" y2="112"/><line x1="160" y1="128" x2="170" y2="130"/></g><circle cx="75" cy="112" r="9" fill="#f2a035" opacity=".8"/><circle cx="125" cy="112" r="9" fill="#f2a035" opacity=".8"/><g class="eye"><circle cx="80" cy="95" r="14" fill="#fff"/><circle cx="80" cy="98" r="7" fill="#2a2a2a"/><circle cx="76" cy="92" r="3.5" fill="#fff"/></g><g class="eye"><circle cx="120" cy="95" r="14" fill="#fff"/><circle cx="120" cy="98" r="7" fill="#2a2a2a"/><circle cx="116" cy="92" r="3.5" fill="#fff"/></g><path d="M68 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/><path d="M108 82 q12-10 24 0" fill="none" stroke="#a86a12" stroke-width="5" stroke-linecap="round"/><circle cx="100" cy="108" r="6" fill="#ffcf59" stroke="#c67a12" stroke-width="2"/><path d="M85 120 q15 18 30 0 q-7 18-30 0z" fill="#d3542f" stroke="#a63b1c" stroke-width="3"/><path d="M96 132 q7 6 14 0" fill="none" stroke="#e97b57" stroke-width="3" stroke-linecap="round"/><g class="hat"><ellipse cx="100" cy="52" rx="46" ry="12" fill="#1e8da1" stroke="#0f5e6b" stroke-width="5"/><path d="M65 45 q35-25 70 0 v22 h-70z" fill="#1da0b4" stroke="#0f5e6b" stroke-width="5" /><path d="M60 55 q40-18 80 0" fill="none" stroke="#147a8a" stroke-width="5" stroke-linecap="round"/></g></svg>`; return wrap; }
 
-  // ---------- Auto‑Sim Core ----------
+  // ---------- Auto-Sim Core ----------
   function marketingBoost(){ let m=0; if(S.marketing.flyerDaysLeft>0) m+=0.10; if(S.marketing.socialToday) m+=0.25; return m; }
   function trafficN(){ return Math.round(ECON.F_base * (S.economyIndex||1) * (S.reputation||1) * (S.seasonality||1) * (1+marketingBoost())); }
   function waitW(lambda,mu){ return clamp((lambda-mu)*ECON.tau,0,ECON.Wmax); }
   function conversionC(P,P0,Q,W){ const {C0,epsilon,alpha,beta,kappa,delta}=ECON; const priceTerm=Math.exp(-epsilon*(P/P0-1)); const qualityTerm=alpha+beta*Q; const waitPen=1-Math.min(kappa, delta*W); return clamp(C0*priceTerm*qualityTerm*waitPen,0,0.95); }
 
   function stepAuto(){
-    // if paused or not running, do nothing
     if(!S.autosim.running) return;
 
     const prod=S.products.croissant;
-    // In‑game minute advance based on speed
     S.timeMin += 1;
 
     // Production planning: spread planned lot across first 120 min
-    // If at minute 0: allocate plannedQty to a production queue
-    if(S.timeMin===8*60){ // new day started earlier; ensure queue
-      // (no-op here; day rollover handled when S.timeMin >= 8*60 + DAY_MINUTES)
-    }
-    const earlyWindow = (S.timeMin - 8*60) < 120; // first 2 hours
+    const earlyWindow = (S.timeMin - 8*60) < 120;
     if(earlyWindow){
       const planPerMin = Math.ceil(prod.plannedQty / 120);
       const ovenFactor = S.upgrades.ovenPlus?1.5:1;
@@ -160,25 +194,19 @@
       }
     }
 
-    // Customers per minute
     const Nday = trafficN();
-    const lambdaMin = Nday / DAY_MINUTES; // arrivals per minute
-    // Stochastic arrivals ~ Poisson(lambda) approximated via Bernoulli trials
+    const lambdaMin = Nday / DAY_MINUTES;
     const arrivals = (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0);
 
     const baseMu=S.capacity.cashierMu + (S.upgrades.posRapid?0.8:0) + Math.max(0, S.staff.cashier-1)*0.5;
-    let mu=baseMu; // service rate (customers/min)
+    let mu=baseMu;
 
-    // Boost W bonus
     let W = waitW(arrivals, mu) + (S.boost.wBonus||0); W = Math.max(0,W);
 
-    // Determine active price (happy hour windows)
     const P0=prod.P0; let P=prod.price;
     const hh = prod.happyHour; const HHs=toMinutes(hh.start), HHe=toMinutes(hh.end);
     if(hh.enabled && S.timeMin>=HHs && S.timeMin<HHe) P = P * (1 - hh.discount);
-    if(S.marketing.socialToday) P = P; // no direct price change, only N via marketing
-
-    const Q=avgQuality('croissant') + (S.boost.qBonus||0); // average quality including boost
+    const Q=avgQuality('croissant') + (S.boost.qBonus||0);
     const C=conversionC(P,P0,clamp(Q,0,1),W);
 
     const demandMin = Math.round(arrivals * C);
@@ -186,61 +214,47 @@
     const rev = sold * P;
     const cogs = sold * (prod.cost.ingredients + prod.cost.laborVar);
 
-    // Aggregate for the day (reset at day start)
     const A=S.autosim.aggregates; A.sold+=sold; A.rev+=rev; A.cogs+=cogs; A.N=Nday; A.C=C; A.W=W; A.Q=Q;
 
-    S.cash += rev; // collect revenue immediately
+    S.cash += rev;
 
-    // Gradually decay boost
     if(S.boost.percent>0){
       S.boost.percent = Math.max(0, S.boost.percent - S.boost.decayPerMin);
-      S.boost.qBonus = 0.05 * (S.boost.percent/100); // up to +0.05 Q
-      S.boost.wBonus = -1.2 * (S.boost.percent/100); // up to −1.2 min W
+      S.boost.qBonus = 0.05 * (S.boost.percent/100);
+      S.boost.wBonus = -1.2 * (S.boost.percent/100);
     } else { S.boost.qBonus=0; S.boost.wBonus=0; }
 
-    // Update UI
     refreshTop();
     setMetrics({N:Nday,C,W,Q,sold:A.sold,rev:A.rev,profit:A.rev - A.cogs - (S.today?.fixed||0)});
 
-    // Day end
     if(S.timeMin >= 8*60 + DAY_MINUTES){ endOfDay(); }
   }
 
   function endOfDay(){
     const prod=S.products.croissant; const A=S.autosim.aggregates; const stockLeft=totalStock('croissant');
-    const holding = stockLeft * 0.10; // hold cost per unit per day
+    const holding = stockLeft * 0.10;
     const marketingCost = (S.marketing.socialToday?150:0) + (S.marketing.flyerDaysLeft>0 && !S.today?.chargedFlyer ? 80 : 0);
-    const fixed = 150; // fixed cost per day
+    const fixed = 150;
     const profit = A.rev - A.cogs - holding - marketingCost - fixed;
 
-    // Expiry salvage
     const expPrev = ageAndExpire();
     const lots=expPrev['croissant']||[]; const expired=lots.reduce((s,l)=>s+l.qty,0);
     const salvage = expired * ECON.gammaSalvage * (prod.cost.ingredients + prod.cost.laborVar);
     S.cash += salvage;
 
-    // Reputation update
     const complaints = Math.max(0, (A.N>0)? (1 - A.sold/Math.max(1, Math.round(A.N*A.C))) : 0);
     const rho=ECON.rho; const f = clamp(0.80,1.20, 0.9 + 0.25*(A.Q-0.85) - 0.05*complaints);
     S.reputation = clamp(0.80,1.20, rho*(S.reputation||1) + (1-rho)*f);
 
     S.today={ report:{ sold:A.sold, revenue:A.rev, cogs:A.cogs, holding, marketing:marketingCost, fixed, profit, expired, salvage, Q:A.Q, W:A.W, C:A.C }, chargedFlyer: (S.marketing.flyerDaysLeft>0)};
 
-    // Decrease marketing durations
     if(S.marketing.flyerDaysLeft>0) S.marketing.flyerDaysLeft--; S.marketing.socialToday=false;
-
-    // Reset aggregates for next day
     S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0};
-
-    // Advance day & reset time
-    S.day += 1; S.timeMin = 8*60; // start next day 08:00
-
-    // Re-apply planned lot next day (user can change in pause). Nothing else needed.
+    S.day += 1; S.timeMin = 8*60;
 
     saveState(S);
     refreshTop();
 
-    // Show small confetti if profit > 0
     if(profit>0) spawnConfetti();
   }
 
@@ -252,50 +266,73 @@
   }
 
   // ---------- Controls & Pause/Speed ----------
-  function applyControlsToState(){ const prod=S.products.croissant; prod.price=clamp(parseFloat(inpPrice.value)||10, prod.P0*0.7, prod.P0*1.3); prod.plannedQty=Math.max(0, Math.round(parseFloat(inpLot.value)||0)); prod.happyHour.start=inpHHs.value||'16:00'; prod.happyHour.end=inpHHe.value||'17:00'; prod.happyHour.discount=clamp((parseFloat(inpHHd.value)||10)/100, 0.05, 0.20); prod.happyHour.enabled=true; S.marketing.socialToday = !!chkSocial.checked; if(chkFlyer.checked && S.marketing.flyerDaysLeft<=0){ S.marketing.flyerDaysLeft=2; S.today={...(S.today||{}), chargedFlyer:true}; if(S.cash>=80){ S.cash-=80; } }
-    S.staff.cashier=parseInt(selCashiers.value,10)||1; S.upgrades.ovenPlus=!!upOven.checked; S.upgrades.posRapid=!!upPos.checked; S.upgrades.timerAuto=!!upAuto.checked; saveState(S); refreshTop(); }
+  function applyControlsToState(){
+    const prod=S.products.croissant;
+    prod.price=clamp(parseFloat(inpPrice?.value)||10, prod.P0*0.7, prod.P0*1.3);
+    prod.plannedQty=Math.max(0, Math.round(parseFloat(inpLot?.value)||0));
+    prod.happyHour.start=inpHHs?.value||'16:00';
+    prod.happyHour.end=inpHHe?.value||'17:00';
+    prod.happyHour.discount=clamp((parseFloat(inpHHd?.value)||10)/100, 0.05, 0.20);
+    prod.happyHour.enabled=true;
+    S.marketing.socialToday = !!chkSocial?.checked;
+    if(chkFlyer?.checked && S.marketing.flyerDaysLeft<=0){
+      S.marketing.flyerDaysLeft=2; S.today={...(S.today||{}), chargedFlyer:true};
+      if(S.cash>=80){ S.cash-=80; }
+    }
+    S.staff.cashier=parseInt(selCashiers?.value||'1',10)||1;
+    S.upgrades.ovenPlus=!!upOven?.checked;
+    S.upgrades.posRapid=!!upPos?.checked;
+    S.upgrades.timerAuto=!!upAuto?.checked;
+    saveState(S); refreshTop();
+  }
 
-  function setPaused(paused){ S.autosim.running = !paused; btnPause.textContent = paused? '▶️ Reia' : '⏸️ Pauză'; // Disable inputs when running
-    $$('#left-controls input, #left-controls select').forEach(el=>{ el.disabled = !paused; }); }
+  function setPaused(paused){
+    S.autosim.running = !paused;
+    if(btnPause) btnPause.textContent = paused? '▶️ Reia' : '⏸️ Pauză';
+    $$('#left-controls input, #left-controls select').forEach(el=>{ el.disabled = !paused; });
+  }
 
   function setSpeed(mult){ S.autosim.speed = mult; speedBtns.forEach(b=>b.classList.toggle('active', Number(b.dataset.speed)===mult)); }
 
   function loopStart(){ if(S.autosim.tickHandle) clearInterval(S.autosim.tickHandle); const tick = ()=>{ for(let i=0;i<S.autosim.speed;i++) stepAuto(); }; S.autosim.tickHandle = setInterval(tick, S.autosim.tickMsBase); }
 
-  // ---------- Arcade Mini‑Game ----------
+  // ---------- Arcade Mini-Game ----------
   let arcadeRunning=false, arcadeTimer=null, arcElapsed=0;
-  function anyModalOpen(){ return (modalArc && !modalArc.hidden) || (modalPrep && !modalPrep.hidden); }
-  function closeAllModals(){
-    if(modalArc && !modalArc.hidden){ modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); }
-    if(modalPrep && !modalPrep.hidden){ modalPrep.hidden=true; }
-  }
   function openArcade(){
-    // ensure only one modal is open at a time
-    if(modalPrep && !modalPrep.hidden) modalPrep.hidden=true;
-    modalArc.hidden=false; arcadeRunning=true; arcElapsed=0; arcBar.style.width='0%'; arcOven.src='oven_open.png'; arcTray.style.opacity='1'; document.addEventListener('keydown', onArcadeKey); // animation keyframes are in CSS
-    setTimeout(()=>{ arcOven.src='oven_closed.png'; }, 600); setTimeout(()=>{ arcOven.src='oven_open.png'; }, 2400);
-    arcadeTimer=setInterval(()=>{ arcElapsed+=100; arcBar.style.width = Math.min(100,(arcElapsed/3000)*100)+'%'; if(arcElapsed>=3000) { finishArcade(1.0); } },100); }
-  function onArcadeKey(e){ if(!arcadeRunning) return; if(e.code==='Space'){ // 55%±7%
-      const p=arcElapsed/3000; const inWin = p>=0.48 && p<=0.62; finishArcade(p, inWin); }
+    Modal.closeAll();
+    if(!modalArc) return;
+    Modal.open(modalArc);
+    arcadeRunning=true; arcElapsed=0;
+    if(arcBar) arcBar.style.width='0%';
+    if(arcOven) arcOven.src='oven_open.png';
+    if(arcTray) arcTray.style.opacity='1';
+    document.addEventListener('keydown', onArcadeKey);
+    setTimeout(()=>{ if(arcOven) arcOven.src='oven_closed.png'; }, 600);
+    setTimeout(()=>{ if(arcOven) arcOven.src='oven_open.png'; }, 2400);
+    arcadeTimer=setInterval(()=>{ arcElapsed+=100; if(arcBar) arcBar.style.width = Math.min(100,(arcElapsed/3000)*100)+'%'; if(arcElapsed>=3000) { finishArcade(1.0); } },100);
   }
-  function finishArcade(p, inWin){ if(!arcadeRunning) return; arcadeRunning=false; document.removeEventListener('keydown', onArcadeKey); clearInterval(arcadeTimer); const ideal=0.55; const d=Math.abs(p-ideal); let boost=0; let q=0.9 - d*0.5; if(inWin){ boost = Math.max(10, Math.round((1 - d/0.07)*30)); q = clamp(q,0.88,0.97); } else { boost = 5; q = clamp(0.80,0.85,0.86 - d*0.4); }
-    // Add some fresh inventory from manual success
+  function onArcadeKey(e){ if(!arcadeRunning) return; if(e.code==='Space'){ const p=arcElapsed/3000; const inWin = p>=0.48 && p<=0.62; finishArcade(p, inWin); } }
+  function finishArcade(p, inWin){
+    if(!arcadeRunning) return; arcadeRunning=false; document.removeEventListener('keydown', onArcadeKey); clearInterval(arcadeTimer);
+    const ideal=0.55; const d=Math.abs(p-ideal); let boost=0; let q=0.9 - d*0.5;
+    if(inWin){ boost = Math.max(10, Math.round((1 - d/0.07)*30)); q = clamp(q,0.88,0.97); } else { boost = 5; q = clamp(0.80,0.85,0.86 - d*0.4); }
     addInventory('croissant', 10, q);
-    // Apply boost percent (cap at 100)
     S.boost.percent = clamp(S.boost.percent + boost, 0, 100);
     S.boost.qBonus = 0.05 * (S.boost.percent/100);
     S.boost.wBonus = -1.2 * (S.boost.percent/100);
-    refreshTop(); setTimeout(()=>{ modalArc.hidden=true; }, 400); saveState(S); }
+    refreshTop(); saveState(S);
+    setTimeout(()=>{ Modal.close(modalArc); }, 400);
+  }
 
   // ---------- Prep (ingredients) ----------
   function openPrep(){
-    // ensure only one modal is open at a time
-    if(modalArc && !modalArc.hidden){ modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); }
-    modalPrep.hidden=false;
+    Modal.closeAll();
+    if(!modalPrep) return;
+    Modal.open(modalPrep);
     if(prepPalette && prepPalette.childElementCount===0){ buildPrepPalette(); }
     resetPrep(false);
   }
-  function closePrep(){ modalPrep.hidden=true; }
+  function closePrep(){ Modal.close(modalPrep); }
   function buildPrepPalette(){
     const frag=document.createDocumentFragment();
     INGREDIENTS.forEach(ing=>{
@@ -310,30 +347,22 @@
     prepPalette.appendChild(frag);
   }
   function addIngredient(ingId){
-    // cap toppings to 8 to avoid clutter
     if(prepSelected.length>=8) return;
     prepSelected.push(ingId);
-    // visual sprinkle on cookie
     const ing=INGREDIENTS.find(i=>i.id===ingId);
-    if(ing){
+    if(ing && prepToppings){
       const it=document.createElement('img'); it.src=ing.icon; it.alt=ing.name; it.title='Click pentru a elimina';
-      const rx=20+Math.random()*60, ry=20+Math.random()*60; // in %
+      const rx=20+Math.random()*60, ry=20+Math.random()*60;
       it.style.left=rx+'%'; it.style.top=ry+'%';
       it.addEventListener('click', ()=>{
-        // remove one occurrence of this ing
         const idx=prepSelected.indexOf(ingId); if(idx>=0){ prepSelected.splice(idx,1); }
-        it.remove();
-        renderPrepList();
+        it.remove(); renderPrepList();
       });
       prepToppings.appendChild(it);
     }
     renderPrepList();
   }
-  function resetPrep(clearOnly=true){
-    prepSelected=[]; if(prepToppings) prepToppings.innerHTML='';
-    if(prepCookie) prepCookie.src='cookie_bake_plain.png';
-    if(clearOnly) renderPrepList(); else renderPrepList();
-  }
+  function resetPrep(){ prepSelected=[]; if(prepToppings) prepToppings.innerHTML=''; if(prepCookie) prepCookie.src='cookie_bake_plain.png'; renderPrepList(); }
   function renderPrepList(){
     if(!prepList) return;
     prepList.innerHTML='';
@@ -344,17 +373,14 @@
     });
   }
   function calcPrepOutcome(){
-    // compute quality and final preview image
     let q=0.86; const uniq=new Set(prepSelected.filter(id=>INGREDIENTS.find(i=>i.id===id)?.kind==='mix'));
     if(uniq.has('cacao')) q+=0.01;
     if(uniq.has('chocolate_chips')) q+=0.03;
     if(uniq.has('strawberries')) q+=0.02;
     if(uniq.has('coconut')) q+=0.02;
     if(uniq.has('sprinkles')) q+=0.01;
-    // penalty for too many toppings
     const mixCount=Array.from(uniq).length; if(mixCount>3) q -= 0.01*(mixCount-3);
     q=clamp(q,0.82,0.97);
-    // choose preview image by priority
     const priority=['chocolate_chips','strawberries','coconut','cacao','sprinkles'];
     let img='cookie_bake_plain.png';
     for(const p of priority){ if(uniq.has(p)){ img = p==='cacao'? 'cookie_bake_cacao.png'
@@ -367,49 +393,100 @@
   function bakePrep(){
     const {q, img}=calcPrepOutcome();
     if(prepCookie) prepCookie.src=img;
-    // yield increases slightly with mixCount (but cap)
     const mixCount=new Set(prepSelected.filter(id=>INGREDIENTS.find(i=>i.id===id)?.kind==='mix')).size;
     const qty=clamp(8 + mixCount*1, 8, 14);
     addInventory('croissant', qty, q);
-    // boost scales with q
     const boost = clamp(Math.round((q-0.85)*180), 6, 28);
     S.boost.percent = clamp(S.boost.percent + boost, 0, 100);
     S.boost.qBonus = 0.05 * (S.boost.percent/100);
     S.boost.wBonus = -1.2 * (S.boost.percent/100);
     refreshTop(); saveState(S);
-    // small timeout to let player see cookie update
     setTimeout(()=> closePrep(), 450);
   }
 
   // ---------- Time helpers ----------
   function toMinutes(hhmm){ const [h,m]=String(hhmm||'16:00').split(':').map(Number); return (h*60 + m); }
 
-  // ---------- Init ----------
-  function hydrateControls(){ const prod=S.products.croissant; inpPrice.value=prod.price; rngPrice.value=prod.price; inpLot.value=prod.plannedQty; inpHHs.value=prod.happyHour.start; inpHHe.value=prod.happyHour.end; inpHHd.value=Math.round((prod.happyHour.discount||0.10)*100); chkFlyer.checked=S.marketing.flyerDaysLeft>0; chkSocial.checked=S.marketing.socialToday; selCashiers.value=String(S.staff.cashier||1); upOven.checked=!!S.upgrades.ovenPlus; upPos.checked=!!S.upgrades.posRapid; upAuto.checked=!!S.upgrades.timerAuto; }
+  // ---------- Intro (acum doar la cerere) ----------
+  function openIntro(){
+    if(!intro) return;
+    Modal.closeAll();
+    Modal.open(intro);
+  }
+  function closeIntro(){
+    Modal.close(intro);
+    if(chkHelp){ localStorage.setItem('fk_help', chkHelp.checked? 'on':'off'); }
+  }
 
-  function mount(){ refreshTop(); hydrateControls(); banCorner.innerHTML=''; banCorner.appendChild(buildBanisorSprite(120)); ticker.textContent='Auto‑sim '+(S.autosim.running? 'activ' : 'în pauză'); if(localStorage.getItem('fk_help')==='off'){ intro.remove(); } }
+  // ---------- Init ----------
+  function hydrateControls(){
+    const prod=S.products.croissant;
+    if(inpPrice) { inpPrice.value=prod.price; }
+    if(rngPrice) { rngPrice.value=prod.price; }
+    if(inpLot) { inpLot.value=prod.plannedQty; }
+    if(inpHHs) inpHHs.value=prod.happyHour.start;
+    if(inpHHe) inpHHe.value=prod.happyHour.end;
+    if(inpHHd) inpHHd.value=Math.round((prod.happyHour.discount||0.10)*100);
+    if(chkFlyer) chkFlyer.checked=S.marketing.flyerDaysLeft>0;
+    if(chkSocial) chkSocial.checked=S.marketing.socialToday;
+    if(selCashiers) selCashiers.value=String(S.staff.cashier||1);
+    if(upOven) upOven.checked=!!S.upgrades.ovenPlus;
+    if(upPos) upPos.checked=!!S.upgrades.posRapid;
+    if(upAuto) upAuto.checked=!!S.upgrades.timerAuto;
+  }
+
+  function mount(){
+    refreshTop(); hydrateControls();
+    if(banCorner){ banCorner.innerHTML=''; banCorner.appendChild(buildBanisorSprite(120)); }
+    if(ticker) ticker.textContent='Auto-sim '+(S.autosim.running? 'activ' : 'în pauză');
+
+    // NU mai deschidem Intro automat. Îl ținem ascuns.
+    if(intro) intro.hidden=true;
+
+    // Dacă vrei să respecți preferința utilizatorului: doar memorează, nu auto-deschide
+    if(localStorage.getItem('fk_help')===null){ localStorage.setItem('fk_help','on'); }
+  }
 
   // ---------- Wire events ----------
-  btnStart?.addEventListener('click', ()=>{ intro.remove(); localStorage.setItem('fk_help', chkHelp.checked? 'on':'off'); });
-  btnPause.addEventListener('click', ()=>{ const nowPaused=S.autosim.running; setPaused(nowPaused); ticker.textContent = nowPaused? 'Auto‑sim în pauză' : 'Auto‑sim activ…'; if(!nowPaused){ applyControlsToState(); } });
-  rngPrice.addEventListener('input', ()=> inpPrice.value=rngPrice.value);
-  inpPrice.addEventListener('input', ()=> rngPrice.value=inpPrice.value);
-  [inpLot, inpHHs, inpHHe, inpHHd, chkFlyer, chkSocial, selCashiers, upOven, upPos, upAuto].forEach(el=> el.addEventListener('change', ()=>{}));
+  btnStart?.addEventListener('click', closeIntro);
+  btnPause?.addEventListener('click', ()=>{
+    const nowPaused=S.autosim.running;
+    setPaused(nowPaused);
+    if(ticker) ticker.textContent = nowPaused? 'Auto-sim în pauză' : 'Auto-sim activ…';
+    if(!nowPaused){ applyControlsToState(); }
+  });
+  rngPrice?.addEventListener('input', ()=> { if(inpPrice) inpPrice.value=rngPrice.value; });
+  inpPrice?.addEventListener('input', ()=> { if(rngPrice) rngPrice.value=inpPrice.value; });
+  [inpLot, inpHHs, inpHHe, inpHHd, chkFlyer, chkSocial, selCashiers, upOven, upPos, upAuto].forEach(el=> el?.addEventListener('change', ()=>{}));
   speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset.speed))));
-  btnArcade.addEventListener('click', ()=> openArcade());
-  btnArcClose.addEventListener('click', ()=> { modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); });
+  btnArcade?.addEventListener('click', openArcade);
+  btnArcClose?.addEventListener('click', ()=> { Modal.close(modalArc); arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); });
+
   // Prep events
-  btnPrep?.addEventListener('click', ()=> openPrep());
-  btnPrepClose?.addEventListener('click', ()=> closePrep());
-  btnPrepReset?.addEventListener('click', ()=> resetPrep());
-  btnPrepBake?.addEventListener('click', ()=> bakePrep());
-  // ESC closes any open modal (but we never auto-open)
+  btnPrep?.addEventListener('click', openPrep);
+  btnPrepClose?.addEventListener('click', closePrep);
+  btnPrepReset?.addEventListener('click', resetPrep);
+  btnPrepBake?.addEventListener('click', bakePrep);
+
+  // Intro deschidere doar la apăsarea pe brand sau pe un buton opțional
+  elBrand?.addEventListener('click', openIntro);
+  btnIntro?.addEventListener('click', openIntro);
+
+  // ESC închide orice modal deschis
   document.addEventListener('keydown', (e)=>{
-    if(e.key==='Escape') closeAllModals();
+    if(e.key==='Escape') Modal.closeAll();
+  });
+
+  // Click pe overlay (în afara ferestrei) închide modalul
+  document.addEventListener('click', (e)=>{
+    const overlay = e.target.closest('.modal-overlay');
+    if(overlay && e.target === overlay){
+      Modal.close(overlay);
+    }
   });
 
   // ---------- Start engine ----------
-  setPaused(false); // start running
+  setPaused(false); // start running (ca înainte)
   loopStart();
   mount();
 })();
