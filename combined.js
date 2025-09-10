@@ -74,6 +74,17 @@
   const modalArc=$('#arcade-modal'), btnArcClose=$('#btn-arc-close');
   const arcBar=$('#arc-bar'), arcOven=$('#arc-oven'), arcTray=$('#arc-tray'), arcCookie=$('#arc-cookie');
 
+  // Prep modal elements
+  const btnPrep=$('#btn-prep');
+  const modalPrep=$('#prep-modal');
+  const prepPalette=$('#prep-palette');
+  const prepToppings=$('#prep-toppings');
+  const prepCookie=$('#prep-cookie');
+  const prepList=$('#prep-list');
+  const btnPrepClose=$('#btn-prep-close');
+  const btnPrepReset=$('#btn-prep-reset');
+  const btnPrepBake=$('#btn-prep-bake');
+
   // Ticker & Banisor
   const ticker=$('#ticker');
   const banCorner=$('#banisor-corner');
@@ -81,6 +92,19 @@
   // ---------- Constants ----------
   const ECON={ F_base:120, C0:0.50, epsilon:1.6, alpha:0.75, beta:0.50, kappa:0.60, delta:0.10, Wmax:6, tau:3, rho:0.75, gammaSalvage:0.20 };
   const DAY_MINUTES=8*60; // 8h workday
+
+  // Prep constants
+  const INGREDIENTS=[
+    {id:'flour', name:'Făină', icon:'flour.png', kind:'base'},
+    {id:'milk', name:'Lapte', icon:'milk.png', kind:'base'},
+    {id:'sugar', name:'Zahăr', icon:'sugar.png', kind:'mix'},
+    {id:'cacao', name:'Cacao', icon:'cacao.png', kind:'mix'},
+    {id:'chocolate_chips', name:'Cipuri ciocolată', icon:'chocolate_chips.png', kind:'mix'},
+    {id:'strawberries', name:'Căpșuni', icon:'strawberries.png', kind:'mix'},
+    {id:'coconut', name:'Cocos', icon:'coconut.png', kind:'mix'},
+    {id:'sprinkles', name:'Ornamente', icon:'sprinkles.png', kind:'mix'}
+  ];
+  let prepSelected=[]; // array of ingredient ids (order of adding)
 
   // ---------- Helpers (Inventory) ----------
   function addInventory(key, qty, q){ if(qty<=0) return; const p=S.products[key]; p.stock.push({ qty:Math.round(qty), q:clamp(q,0,1), age:0 }); }
@@ -255,6 +279,98 @@
     S.boost.wBonus = -1.2 * (S.boost.percent/100);
     refreshTop(); setTimeout(()=>{ modalArc.hidden=true; }, 400); saveState(S); }
 
+  // ---------- Prep (ingredients) ----------
+  function openPrep(){
+    modalPrep.hidden=false;
+    if(prepPalette && prepPalette.childElementCount===0){ buildPrepPalette(); }
+    resetPrep(false);
+  }
+  function closePrep(){ modalPrep.hidden=true; }
+  function buildPrepPalette(){
+    const frag=document.createDocumentFragment();
+    INGREDIENTS.forEach(ing=>{
+      const b=document.createElement('button');
+      b.type='button'; b.className='ingredient-btn'; b.dataset.ing=ing.id;
+      const img=document.createElement('img'); img.src=ing.icon; img.alt=ing.name;
+      const span=document.createElement('span'); span.textContent=ing.name;
+      b.appendChild(img); b.appendChild(span);
+      b.addEventListener('click', ()=> addIngredient(ing.id));
+      frag.appendChild(b);
+    });
+    prepPalette.appendChild(frag);
+  }
+  function addIngredient(ingId){
+    // cap toppings to 8 to avoid clutter
+    if(prepSelected.length>=8) return;
+    prepSelected.push(ingId);
+    // visual sprinkle on cookie
+    const ing=INGREDIENTS.find(i=>i.id===ingId);
+    if(ing){
+      const it=document.createElement('img'); it.src=ing.icon; it.alt=ing.name; it.title='Click pentru a elimina';
+      const rx=20+Math.random()*60, ry=20+Math.random()*60; // in %
+      it.style.left=rx+'%'; it.style.top=ry+'%';
+      it.addEventListener('click', ()=>{
+        // remove one occurrence of this ing
+        const idx=prepSelected.indexOf(ingId); if(idx>=0){ prepSelected.splice(idx,1); }
+        it.remove();
+        renderPrepList();
+      });
+      prepToppings.appendChild(it);
+    }
+    renderPrepList();
+  }
+  function resetPrep(clearOnly=true){
+    prepSelected=[]; if(prepToppings) prepToppings.innerHTML='';
+    if(prepCookie) prepCookie.src='cookie_bake_plain.png';
+    if(clearOnly) renderPrepList(); else renderPrepList();
+  }
+  function renderPrepList(){
+    if(!prepList) return;
+    prepList.innerHTML='';
+    const counts={}; prepSelected.forEach(id=>{ counts[id]=(counts[id]||0)+1; });
+    Object.keys(counts).forEach(id=>{
+      const ing=INGREDIENTS.find(i=>i.id===id); const li=document.createElement('li');
+      li.textContent=(ing? ing.name: id)+ ' × '+counts[id]; prepList.appendChild(li);
+    });
+  }
+  function calcPrepOutcome(){
+    // compute quality and final preview image
+    let q=0.86; const uniq=new Set(prepSelected.filter(id=>INGREDIENTS.find(i=>i.id===id)?.kind==='mix'));
+    if(uniq.has('cacao')) q+=0.01;
+    if(uniq.has('chocolate_chips')) q+=0.03;
+    if(uniq.has('strawberries')) q+=0.02;
+    if(uniq.has('coconut')) q+=0.02;
+    if(uniq.has('sprinkles')) q+=0.01;
+    // penalty for too many toppings
+    const mixCount=Array.from(uniq).length; if(mixCount>3) q -= 0.01*(mixCount-3);
+    q=clamp(q,0.82,0.97);
+    // choose preview image by priority
+    const priority=['chocolate_chips','strawberries','coconut','cacao','sprinkles'];
+    let img='cookie_bake_plain.png';
+    for(const p of priority){ if(uniq.has(p)){ img = p==='cacao'? 'cookie_bake_cacao.png'
+                                         : p==='coconut'? 'cookie_bake_cocos.png'
+                                         : p==='strawberries'? 'cookie_strawberry.png'
+                                         : p==='chocolate_chips'? 'cookie_choco.png'
+                                         : 'cookie_sprinkle.png'; break; } }
+    return { q, img };
+  }
+  function bakePrep(){
+    const {q, img}=calcPrepOutcome();
+    if(prepCookie) prepCookie.src=img;
+    // yield increases slightly with mixCount (but cap)
+    const mixCount=new Set(prepSelected.filter(id=>INGREDIENTS.find(i=>i.id===id)?.kind==='mix')).size;
+    const qty=clamp(8 + mixCount*1, 8, 14);
+    addInventory('croissant', qty, q);
+    // boost scales with q
+    const boost = clamp(Math.round((q-0.85)*180), 6, 28);
+    S.boost.percent = clamp(S.boost.percent + boost, 0, 100);
+    S.boost.qBonus = 0.05 * (S.boost.percent/100);
+    S.boost.wBonus = -1.2 * (S.boost.percent/100);
+    refreshTop(); saveState(S);
+    // small timeout to let player see cookie update
+    setTimeout(()=> closePrep(), 450);
+  }
+
   // ---------- Time helpers ----------
   function toMinutes(hhmm){ const [h,m]=String(hhmm||'16:00').split(':').map(Number); return (h*60 + m); }
 
@@ -272,6 +388,11 @@
   speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset.speed))));
   btnArcade.addEventListener('click', ()=> openArcade());
   btnArcClose.addEventListener('click', ()=> { modalArc.hidden=true; arcadeRunning=false; clearInterval(arcadeTimer); document.removeEventListener('keydown', onArcadeKey); });
+  // Prep events
+  btnPrep?.addEventListener('click', ()=> openPrep());
+  btnPrepClose?.addEventListener('click', ()=> closePrep());
+  btnPrepReset?.addEventListener('click', ()=> resetPrep());
+  btnPrepBake?.addEventListener('click', ()=> bakePrep());
 
   // ---------- Start engine ----------
   setPaused(false); // start running

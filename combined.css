@@ -88,3 +88,21 @@ hr{border:0;border-top:1px dashed #d3b37a;margin:.6rem 0}
 
 /* Intro */
 .overlay-intro{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(253,245,230,.88);backdrop-filter:saturate(1.2)}
+
+/* Prep (ingredients) */
+.prep-root{display:grid;grid-template-columns:280px 1fr 280px;gap:12px;margin-top:.4rem}
+.prep-palette{background:#fff;border:2px dashed var(--frame);border-radius:10px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;max-height:420px;overflow:auto}
+.ingredient-btn{display:flex;align-items:center;gap:8px;padding:.35rem .45rem;border:1px solid #e2c48d;border-radius:10px;background:#fffef7;cursor:pointer}
+.ingredient-btn:hover{filter:brightness(.98)}
+.ingredient-btn img{width:32px;height:32px;object-fit:contain}
+.ingredient-btn span{font-size:.9rem}
+.prep-work{display:flex;align-items:center;justify-content:center;background:#fffef7;border:2px solid var(--frame);border-radius:10px;min-height:340px}
+.cookie-stage{position:relative;width:360px;height:260px;display:flex;align-items:center;justify-content:center}
+.prep-cookie{width:160px;height:160px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.15))}
+.prep-toppings{position:absolute;inset:0;pointer-events:auto}
+.prep-toppings img{position:absolute;width:36px;height:36px;cursor:pointer;transition:transform .08s}
+.prep-toppings img:hover{transform:scale(1.05)}
+.prep-summary .summary-box{background:#fffbee;border:1px dashed var(--frame);border-radius:10px;padding:8px;max-height:360px;overflow:auto}
+.prep-list{margin:.2rem 0 .4rem;padding-left:1.1rem}
+.btn.secondary{background:#ffe9b5}
+.btn.secondary:hover{filter:brightness(.97)}

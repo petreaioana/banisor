@@ -122,6 +122,8 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       <hr>
       <button id="btn-arcade" class="btn wide">🎮 Arcade (manual biscuit)</button>
       <div class="small muted">Finalizează cu succes mini-jocul pentru a primi un ⚡ boost temporar la calitate & coadă în auto-sim.</div>
+      <div class="row"></div>
+      <button id="btn-prep" class="btn wide">Preparare manuală (ingrediente)</button>
     </aside>
 
     <main id="center">
@@ -190,6 +192,38 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       </div>
       <div class="footer">
         <button id="btn-arc-close" class="btn secondary">Închide</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prep modal (ingredient-based manual prep) -->
+  <div id="prep-modal" class="modal-overlay" hidden>
+    <div class="modal wide">
+      <h2>Preparare manuală — Biscuiți cu ingrediente</h2>
+      <p>Alege ingrediente și “coace” tava. Vei primi stoc proaspăt și un mic boost la calitate.</p>
+      <div id="prep-root" class="prep-root">
+        <div id="prep-palette" class="prep-palette"></div>
+        <div class="prep-work">
+          <div class="cookie-stage">
+            <img id="prep-cookie" class="prep-cookie" src="cookie_bake_plain.png" alt="Bază biscuite">
+            <div id="prep-toppings" class="prep-toppings"></div>
+          </div>
+        </div>
+        <div class="prep-summary">
+          <div class="summary-box">
+            <h3>Rețetă curentă</h3>
+            <ul id="prep-list" class="prep-list"></ul>
+          </div>
+          <div class="footer">
+            <div>
+              <button id="btn-prep-reset" class="btn secondary">Reset</button>
+            </div>
+            <div>
+              <button id="btn-prep-bake" class="btn">Coace</button>
+              <button id="btn-prep-close" class="btn secondary">Închide</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
