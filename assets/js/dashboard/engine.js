@@ -41,7 +41,10 @@ function consumeInventory(qty){
 }
 
 function marketingBoost(){ let m=0; if(S.marketing.flyerDaysLeft>0) m+=0.10; if(S.marketing.socialToday) m+=0.25; return m; }
-function trafficN(){ return Math.round(ECON.F_base * (S.economyIndex||1) * (S.reputation||1) * (S.seasonality||1) * (1+marketingBoost())); }
+function trafficN(){
+  const base = ECON.F_base * (S.economyIndex||1) * (S.reputation||1) * (S.seasonality||1) * (1+marketingBoost());
+  return Math.round(base * (S.boost?.trafficMult || 1));
+}
 function waitW(lambda,mu){ return clamp((lambda-mu)*ECON.tau,0,ECON.Wmax); }
 function conversionC(P,P0,Q,W){ const {C0,epsilon,alpha,beta,kappa,delta}=ECON; const priceTerm=Math.exp(-epsilon*(P/P0-1)); const qualityTerm=alpha+beta*Q; const waitPen=1-Math.min(kappa, delta*W); return clamp(C0*priceTerm*qualityTerm*waitPen,0,0.95); }
 
@@ -55,7 +58,9 @@ function refreshTop(){
   elCash.textContent=Math.round(S.cash);
   elStock.textContent=totalStock();
   elRep.textContent=S.reputation.toFixed(2);
-  elBoost.textContent=Math.round(S.boost.percent)+'%';
+  const buffsCount = (S.boost?.buffs?.length)||0;
+  elBoost.textContent=Math.round(S.boost.percent)+'%'+(buffsCount>0?` (${buffsCount})`:'');
+  try{ if(typeof updateTickerBadge==='function') updateTickerBadge(); }catch(e){}
 }
 function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
   barQ.style.width = Math.round(Math.max(0,Math.min(Q,1))*100)+'%';
@@ -75,8 +80,14 @@ function stepAuto(){
     const planPerMin = Math.ceil(prod.plannedQty / 120);
     const ovenFactor = S.upgrades.ovenPlus?1.5:1;
     const ovenCapPerMin = Math.ceil((S.capacity.ovenBatchSize*ovenFactor*S.capacity.ovenBatchesPerDay)/DAY_MINUTES);
-    const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin));
+    // Rețeta curentă și plafon după stoc
+    const rid = (S.products.croissant.recipeId || 'croissant_plain');
+    const need = (S.recipes?.[rid]?.ingredients)||{};
+    const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([k,v])=> Math.floor(((S.ingredients?.[k]?.qty)||0)/Math.max(1,v)))) : planPerMin;
+    const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, maxByStoc));
     if(made>0){
+      // consumă ingrediente conform rețetei
+      FK.consumeFor(rid, made);
       const baseQ = 0.86 + (S.upgrades.ovenPlus?0.02:0) + (S.upgrades.timerAuto?0.02:0) + (S.boost.qBonus||0);
       const noise = (Math.random()*0.06)-0.03;
       addInventory(made, Math.max(0.70, Math.min(0.98, baseQ+noise)));
@@ -106,11 +117,8 @@ function stepAuto(){
 
   S.cash += rev;
 
-  if(S.boost.percent>0){
-    S.boost.percent = Math.max(0, S.boost.percent - S.boost.decayPerMin);
-    S.boost.qBonus = 0.05 * (S.boost.percent/100);
-    S.boost.wBonus = -1.2 * (S.boost.percent/100);
-  } else { S.boost.qBonus=0; S.boost.wBonus=0; }
+  // Tick buffs (durată) o dată pe minut de joc
+  FK.tickBuffs(1);
 
   FK.setState(S);
   refreshTop();
@@ -132,6 +140,14 @@ function endOfDay(){
   const L=prod.shelfLifeDays;
   prod.stock.forEach(l=>l.age++);
   prod.stock = prod.stock.filter(l=> l.age < L);
+  // Perishable raw ingredients: simple daily decay for select items
+  try{
+    const perishables=['milk','strawberries'];
+    perishables.forEach(id=>{
+      const it = S.ingredients && S.ingredients[id];
+      if(it && it.qty>0){ const loss = Math.ceil(it.qty*0.20); it.qty = Math.max(0, it.qty - loss); }
+    });
+  }catch(e){}
 
   const complaints = Math.max(0, (A.N>0)? (1 - A.sold/Math.max(1, Math.round(A.N*A.C))) : 0);
   const rho=ECON.rho; const f = Math.max(0.80, Math.min(1.20, 0.9 + 0.25*(A.Q-0.85) - 0.05*complaints));
@@ -197,3 +213,124 @@ speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset
 setPaused(false);
 loopStart();
 mount();
+
+// --- Buffs popover and ticker badge ---
+function updateTickerBadge(){
+  try{
+    const t=document.getElementById('ticker'); if(!t) return;
+    let label = 'Manager '+(S.autosim.running? 'activ…' : 'în pauză');
+    const rid=(S.products?.croissant?.recipeId)||'croissant_plain';
+    const need=(S.recipes?.[rid]?.ingredients)||{};
+    const lacking = Object.entries(need).some(([k,v])=> ((S.ingredients?.[k]?.qty)||0) < Math.max(1,v));
+    if(lacking) label += ' · 🔴 Stoc ingrediente insuficient';
+    t.textContent = label;
+  }catch(e){}
+}
+function openBuffsPopover(){
+  try{
+    const old=document.getElementById('buffs-popover'); if(old) { old.remove(); return; }
+    const pop=document.createElement('div'); pop.id='buffs-popover';
+    Object.assign(pop.style,{position:'fixed',top:'48px',right:'12px',background:'#fff',color:'#000',border:'1px solid #333',borderRadius:'8px',padding:'.5rem .7rem',zIndex:'99999',boxShadow:'0 4px 16px rgba(0,0,0,.2)'});
+    const buffs=(S.boost?.buffs)||[];
+    if(buffs.length===0){ pop.textContent='Niciun boost activ'; }
+    else{
+      const ul=document.createElement('ul'); ul.style.listStyle='none'; ul.style.margin='0'; ul.style.padding='0';
+      buffs.forEach(b=>{
+        const li=document.createElement('li'); li.style.display='flex'; li.style.justifyContent='space-between'; li.style.gap='.5rem'; li.style.minWidth='220px'; li.style.padding='.15rem 0';
+        const mins=Math.max(0, Math.ceil(b.minutesLeft||0));
+        li.innerHTML=`<span>${b.label||b.id}</span><b>${mins}m</b>`;
+        ul.appendChild(li);
+      });
+      pop.appendChild(ul);
+    }
+    document.body.appendChild(pop);
+    const close=(ev)=>{ if(!pop.contains(ev.target) && ev.target!==elBoost){ pop.remove(); window.removeEventListener('mousedown', close); } };
+    window.addEventListener('mousedown', close);
+  }catch(e){}
+}
+try{ if(elBoost) elBoost.addEventListener('click', openBuffsPopover); }catch(e){}
+
+// Inject small tweaks after mount without touching existing blocks
+try{
+  const t=document.getElementById('ticker'); if(t) t.textContent='Manager activ…';
+  const st=document.querySelector('#stationbar .station.active'); if(st) st.textContent='Manager';
+}catch(e){}
+
+// Monkey-patch: tick buffs once per in-game minute step
+try{
+  const __origStepAuto = stepAuto;
+  window.stepAuto = function(){ __origStepAuto(); try{ if(FK && FK.tickBuffs) FK.tickBuffs(1); }catch(e){} };
+}catch(e){}
+
+// Wrap addInventory used by Manager early production to respect ingredient stock
+try{
+  const __origAddInventory = addInventory;
+  window.addInventory = function(qty,q){
+    try{
+      const Sx = FK.getState();
+      const rid = (Sx.products?.croissant?.recipeId)||'croissant_plain';
+      const need = (Sx.recipes?.[rid]?.ingredients)||{};
+      const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([k,v])=> Math.floor(((Sx.ingredients?.[k]?.qty)||0)/Math.max(1,v)))) : qty;
+      const made = Math.max(0, Math.min(qty, maxByStoc));
+      if(made>0){ FK.consumeFor(rid, made); __origAddInventory(made,q); }
+    }catch(e){ __origAddInventory(qty,q); }
+  };
+}catch(e){}
+
+// Basic buy ingredients UI
+(function(){
+  function mountBuyBtn(){
+    const topRight = document.querySelector('#topbar .right'); if(!topRight) return;
+    if(document.getElementById('btn-buy')) return;
+    const sep=document.createElement('span'); sep.className='sep'; sep.textContent='·';
+    const btn=document.createElement('button'); btn.id='btn-buy'; btn.className='btn'; btn.textContent='🛒 Ingrediente';
+    topRight.insertBefore(sep, topRight.lastElementChild);
+    topRight.insertBefore(btn, topRight.lastElementChild);
+    btn.addEventListener('click', openIngModal);
+  }
+  const PRICE = { flour:2, milk:3, sugar:2, cacao:5, chocolate_chips:6, strawberries:5, coconut:4, sprinkles:3 };
+  function openIngModal(){
+    const modal = document.createElement('div'); modal.id='ing-modal';
+    Object.assign(modal.style,{position:'fixed',inset:'0',background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'99999'});
+    modal.innerHTML = `
+      <div style="background:#fff; color:#000; min-width:320px; max-width:560px; width:90%; border-radius:10px; border:2px solid #333; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:.6rem .8rem; background:#222; color:#fff;">
+          <div>🛒 Cumpără ingrediente</div>
+          <button id="ing-close" class="btn small">✕</button>
+        </div>
+        <div id="ing-list" style="padding:.6rem .8rem; max-height:50vh; overflow:auto;"></div>
+        <div style="display:flex; gap:.5rem; align-items:center; justify-content:flex-end; padding:.6rem .8rem; border-top:1px solid #ddd;">
+          <div>Total: <b id="ing-total">0</b> lei</div>
+          <button id="ing-buy" class="btn">Cumpără</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close=()=>{ modal.remove(); };
+    modal.querySelector('#ing-close').addEventListener('click', close);
+    const list = modal.querySelector('#ing-list');
+    const totalEl = modal.querySelector('#ing-total');
+    const cart = {};
+    const Sx=FK.getState();
+    const makeRow=(id)=>{
+      const name=id.replaceAll('_',' ');
+      const qty=Sx.ingredients?.[id]?.qty||0; const price=PRICE[id]||0; const ttl=Sx.ingredients?.[id]?.shelfLife||0;
+      const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='1fr auto auto auto'; row.style.gap='.5rem'; row.style.alignItems='center'; row.style.padding='.25rem 0';
+      row.innerHTML=`<div><b>${name}</b><div class="muted small">stoc: ${qty}, TTL: ${ttl}z</div></div>
+        <div style="text-align:right;">${price} lei</div>
+        <input type="number" min="0" step="1" value="0" style="width:70px;">
+        <div style="width:80px; text-align:right;" class="row-total">0</div>`;
+      const inp=row.querySelector('input'); const rtot=row.querySelector('.row-total');
+      inp.addEventListener('input',()=>{const v=Math.max(0,Math.round(Number(inp.value)||0)); cart[id]=v; rtot.textContent=String(v*price); updateTotal();});
+      return row;
+    };
+    const updateTotal=()=>{ const sum=Object.entries(cart).reduce((s,[k,v])=> s+(PRICE[k]||0)*Math.max(0,v),0); totalEl.textContent=String(sum); };
+    Object.keys(PRICE).forEach(id=> list.appendChild(makeRow(id)));
+    modal.querySelector('#ing-buy').addEventListener('click',()=>{
+      let spent=0; Object.entries(cart).forEach(([id,qty])=>{ if(qty>0){ const ok=FK.buyIngredient(id,qty,PRICE); if(ok) spent+=(PRICE[id]||0)*qty; }});
+      if(spent>0){ refreshTop(); }
+      close();
+    });
+  }
+  // mount once
+  try{ mountBuyBtn(); }catch(e){}
+})();

@@ -155,6 +155,8 @@ function stopBake(){
   const maxD=(b-a)/2;
   let bakeScore = clamp(100*(1 - d/(maxD||0.001)), 0, 100);
   state.scores.bake = Math.round(bakeScore);
+  // Buff la coacere reușită (în fereastra de timp)
+  if(inWin){ try{ FK.addBuff({id:'freshBake', label:'Coacere perfectă', minutes:45, qBonus:0.02, trafficMult:1.08}); }catch(e){} }
   computeFinalScores();
 }
 
@@ -212,3 +214,27 @@ $('#btn-next').addEventListener('click', ()=>{ /* focus pe Bake */ startBake(); 
 buildPalette();
 newOrder();
 updateTopbar();
+
+// Replace Serve button handler to enforce ingredients & buffs
+(function(){
+  try{
+    const old=document.getElementById('btn-serve'); if(!old) return;
+    const btn=old.cloneNode(true); old.parentNode.replaceChild(btn, old);
+    btn.addEventListener('click', ()=>{
+      if(state.baking.running) return;
+      computeFinalScores();
+      const q = state.scores.q || 0.86;
+      const qty = state.scores.qty || 8;
+      const S = FK.getState(); const rid=(S.products?.croissant?.recipeId)||'croissant_plain';
+      if(!FK.canProduce(rid, qty)) { toast('⚠️ Stoc ingrediente insuficient'); return; }
+      FK.consumeFor(rid, qty);
+      FK.addInventory('croissant', qty, q);
+      if(state.scores.top>=80){ try{ FK.addBuff({id:'fastServe', label:'Servire rapidă', minutes:30, wBonus:-0.6, trafficMult:1.05}); }catch(e){} }
+      toast(`✅ Servit! +${qty} stoc · Q ${q.toFixed(2)}`);
+      try{ $('#g-stock').textContent = FK.totalStock('croissant'); const S2=FK.getState(); const cnt=(S2.boost?.buffs?.length)||0; $('#g-boost').textContent = Math.round(S2.boost.percent)+'%'+(cnt>0?` (${cnt})`:''); }catch(e){}
+    });
+  }catch(e){}
+})();
+
+// Periodically keep manual topbar boost fresh
+try{ setInterval(()=>{ const S=FK.getState(); const cnt=(S.boost?.buffs?.length)||0; const el=document.getElementById('g-boost'); if(el) el.textContent=Math.round(S.boost.percent)+'%'+(cnt>0?` (${cnt})`:''); }, 2000); }catch(e){}
