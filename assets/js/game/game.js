@@ -53,6 +53,12 @@ function buildPalette(){
   });
 }
 
+// Global audio helpers and particles
+let __AC=null; function getAC(){ try{ __AC = __AC || new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} return __AC; }
+function playDing(){ try{ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain(); o.type='triangle'; o.frequency.setValueAtTime(880, ac.currentTime); o.frequency.linearRampToValueAtTime(1320, ac.currentTime+0.12); g.gain.setValueAtTime(0.0001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.06, ac.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.2); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+0.22);}catch(e){} }
+function playBuzz(){ try{ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain(); o.type='sawtooth'; o.frequency.value=220; g.gain.value=0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(e){} },120);}catch(e){} }
+function emitOvenParticles(success=true){ try{ const oi=document.getElementById('oven-img'); if(!oi) return; const r=oi.getBoundingClientRect(); const count= success? 12:6; for(let i=0;i<count;i++){ const d=document.createElement('div'); d.className='particle'; const dx=(Math.random()*60-30)+'px'; const dy=(success? - (20+Math.random()*40): -(10+Math.random()*20))+'px'; d.style.setProperty('--dx', dx); d.style.setProperty('--dy', dy); d.style.left=(r.left + r.width*0.5)+'px'; d.style.top=(r.top + r.height*0.15)+'px'; d.style.background= success? '#f3e38a' : '#d0d0d0'; d.style.position='fixed'; d.style.animation='pop .6s ease-out forwards'; document.body.appendChild(d); setTimeout(()=>d.remove(), 700);} }catch(e){} }
+
 function spawnChip(id){
   const zone=$('#build-drop');
   const img=document.createElement('img');
@@ -60,32 +66,39 @@ function spawnChip(id){
   // random pos %
   const rx=25+Math.random()*50, ry=25+Math.random()*50;
   img.style.left=rx+'%'; img.style.top=ry+'%';
-  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  let dragging=false, sx=0, sy=0, ox=0, oy=0, pid=0;
 
   const start=(e)=>{
-    dragging=true;
-    const p=e.touches? e.touches[0]: e;
-    sx=p.clientX; sy=p.clientY;
-    const rect=img.getBoundingClientRect();
-    ox=rect.left; oy=rect.top;
+    dragging=true; pid=e.pointerId||0; img.setPointerCapture && img.setPointerCapture(pid);
+    sx=e.clientX; sy=e.clientY;
+    const rect=img.getBoundingClientRect(); ox=rect.left; oy=rect.top;
     img.style.cursor='grabbing';
   };
   const move=(e)=>{
     if(!dragging) return;
-    const p=e.touches? e.touches[0]: e;
-    const dx=p.clientX - sx; const dy=p.clientY - sy;
+    const dx=e.clientX - sx; const dy=e.clientY - sy;
     const parent=zone.getBoundingClientRect();
     const nx = ((ox + dx) - parent.left) / parent.width * 100;
     const ny = ((oy + dy) - parent.top) / parent.height * 100;
     img.style.left = clamp(nx,5,95)+'%';
     img.style.top = clamp(ny,5,95)+'%';
   };
-  const end=()=>{
-    dragging=false; img.style.cursor='move'; savePlaced();
+  const end=(e)=>{
+    dragging=false; img.style.cursor='move'; try{ img.releasePointerCapture && img.releasePointerCapture(pid); }catch(_){}
+    // feedback
+    try{
+      const rect=zone.getBoundingClientRect(); const r=img.getBoundingClientRect();
+      const xPct=((r.left + r.width/2 - rect.left)/rect.width)*100; const yPct=((r.top + r.height/2 - rect.top)/rect.height)*100;
+      const colors=['#f8c66a','#f5a8a8','#a8d8f5','#c7f59e','#f9f09a'];
+      for(let i=0;i<6;i++){ const d=document.createElement('div'); d.className='particle'; const dx=(Math.random()*40-20)+'px'; const dy=(Math.random()*40-20)+'px'; d.style.setProperty('--dx', dx); d.style.setProperty('--dy', dy); d.style.left=xPct+'%'; d.style.top=yPct+'%'; d.style.background=colors[i%colors.length]; d.style.animation='pop .5s ease-out forwards'; zone.appendChild(d); setTimeout(()=>d.remove(), 600);} }
+    catch(_){ }
+    try{ const ac=getAC(); if(ac && ac.state==='suspended'){ ac.resume().catch(()=>{}); } }catch(_){}
+    try{ const ac=getAC(); if(ac) { const o=ac.createOscillator(); const g=ac.createGain(); o.type='square'; o.frequency.value=650+Math.random()*200; g.gain.value=0.05; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>o.stop(), 100);} }catch(_){ }
+    savePlaced();
   };
-  img.addEventListener('mousedown', start); img.addEventListener('touchstart', start, {passive:true});
-  window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive:false});
-  window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
+  img.addEventListener('pointerdown', start, {passive:true});
+  img.addEventListener('pointermove', move);
+  img.addEventListener('pointerup', end, {passive:true});
 
   zone.appendChild(img);
   savePlaced();
@@ -293,14 +306,22 @@ try{ setInterval(()=>{ const S=FK.getState(); const cnt=(S.boost?.buffs?.length)
     }
   }catch(e){}
 
-  // Particles + sfx when dropping a topping
-  try{
-    const zone=document.getElementById('build-drop');
-    zone.addEventListener('pointerup', (ev)=>{
-      const t=ev.target; if(t && t.classList && t.classList.contains('topping-chip')){ emitParticlesAt(t); playPop(); }
-    });
-  }catch(e){}
+  // particles/sfx now handled inside spawnChip drag-end
 })();
 
 // Ensure initial hit-window UI aligns to current order
 try{ const span=document.querySelector('.hit-window span'); if(span && state.order){ const [a,b]=state.order.bake; span.style.left=Math.round(a*100)+'%'; span.style.width=Math.round((b-a)*100)+'%'; span.classList.add('pulse'); } }catch(e){}
+
+// Add bake stop feedback (ding/buzz + particles) without touching main function body
+try{
+  const __origStop = stopBake;
+  window.stopBake = function(){
+    __origStop();
+    try{
+      if(state && state.baking && typeof state.baking.inWin==='boolean'){
+        if(state.baking.inWin){ playDing(); emitOvenParticles(true); }
+        else { playBuzz(); emitOvenParticles(false); }
+      }
+    }catch(e){}
+  };
+}catch(e){}
