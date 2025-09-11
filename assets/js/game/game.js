@@ -238,3 +238,69 @@ updateTopbar();
 
 // Periodically keep manual topbar boost fresh
 try{ setInterval(()=>{ const S=FK.getState(); const cnt=(S.boost?.buffs?.length)||0; const el=document.getElementById('g-boost'); if(el) el.textContent=Math.round(S.boost.percent)+'%'+(cnt>0?` (${cnt})`:''); }, 2000); }catch(e){}
+
+// --- Baking UX upgrades (randomized window, easing, particles, sfx) ---
+(function(){
+  function rand(min,max){ return min + Math.random()*(max-min); }
+  function updateHitWindowUI(){ try{ const span=document.querySelector('.hit-window span'); if(!span||!state.order) return; const [a,b]=state.order.bake; span.style.left=Math.round(a*100)+'%'; span.style.width=Math.round((b-a)*100)+'%'; span.classList.add('pulse'); }catch(e){} }
+  // sfx pop using WebAudio
+  let AC=null; function playPop(){ try{ AC = AC || new (window.AudioContext||window.webkitAudioContext)(); const o=AC.createOscillator(); const g=AC.createGain(); o.type='square'; o.frequency.value=650+Math.random()*200; g.gain.value=0.05; o.connect(g); g.connect(AC.destination); o.start(); setTimeout(()=>o.stop(), 100); }catch(e){} }
+  function emitParticlesAt(el){ try{ const zone=document.getElementById('build-drop'); if(!zone||!el) return; const rect=zone.getBoundingClientRect(); const r=el.getBoundingClientRect(); const xPct=((r.left + r.width/2 - rect.left)/rect.width)*100; const yPct=((r.top + r.height/2 - rect.top)/rect.height)*100; const colors=['#f8c66a','#f5a8a8','#a8d8f5','#c7f59e','#f9f09a']; for(let i=0;i<8;i++){ const d=document.createElement('div'); d.className='particle'; const dx=(Math.random()*40-20)+'px'; const dy=(Math.random()*40-20)+'px'; d.style.setProperty('--dx', dx); d.style.setProperty('--dy', dy); d.style.left=xPct+'%'; d.style.top=yPct+'%'; d.style.background=colors[i%colors.length]; d.style.animation='pop .5s ease-out forwards'; zone.appendChild(d); setTimeout(()=>d.remove(), 600);} }catch(e){} }
+
+  // Rebind New Order to randomize hit window and duration
+  try{
+    const old=document.getElementById('btn-new-order'); if(old){
+      const btn=old.cloneNode(true); old.parentNode.replaceChild(btn, old);
+      btn.addEventListener('click', ()=>{
+        const sizes=['S','M','L']; const size = sizes[Math.floor(Math.random()*sizes.length)];
+        const topsCount = 2 + Math.floor(Math.random()*3);
+        const shuffled = ING.slice().sort(()=>Math.random()-0.5);
+        const tops = shuffled.slice(0,topsCount).map(t=>t.id);
+        const center = Math.max(0.35, Math.min(0.75, rand(0.42,0.68)));
+        const width = Math.max(0.06, Math.min(0.18, rand(0.08,0.14)));
+        let a = Math.max(0.05, Math.min(0.90, center - width/2));
+        let b = Math.max(0.10, Math.min(0.95, center + width/2));
+        const dur = Math.round(rand(2400, 3600));
+        state.order = { size, tops, bake:[a,b] };
+        state.placed=[]; state.baking={ running:false, t:0, dur:dur, zone:[...state.order.bake], p:0, inWin:false };
+        state.scores={ top:0, bake:0, q:0, qty:0 };
+        renderOrder(); try{ document.getElementById('ord-bake').textContent = `${Math.round(a*100)}%–${Math.round(b*100)}%`; }catch(e){}; updateHitWindowUI(); renderBuild(); renderScores(); updateTopbar();
+      });
+    }
+  }catch(e){}
+
+  // Rebind Bake to add easing/pulse (leave Stop as-is)
+  try{
+    const oldB=document.getElementById('btn-bake'); if(oldB){
+      const btn=oldB.cloneNode(true); oldB.parentNode.replaceChild(btn, oldB);
+      btn.addEventListener('click', ()=>{
+        if(state.baking.running) return;
+        state.baking.running=true; state.baking.t=0; state.baking.p=0; state.baking.inWin=false;
+        document.getElementById('oven-img').src='images/oven_open.png';
+        clearInterval(bakeTimer);
+        bakeTimer=setInterval(()=>{
+          state.baking.t+=100; const p = Math.max(0, Math.min(1, state.baking.t/state.baking.dur));
+          state.baking.p = p;
+          const bar=document.getElementById('bake-bar');
+          const ease=(t)=>{ if(t<0.2) return t*t*2.5; if(t>0.8) return 0.8+(t-0.8)*0.85; return t; };
+          const pe=ease(p);
+          bar.style.width=(pe*100)+'%';
+          bar.classList.toggle('pulse', p>0.8);
+          if(p>=0.2 && p<0.8) { document.getElementById('oven-img').src='images/oven_closed.png'; }
+          if(p>=1) stopBake();
+        },100);
+      });
+    }
+  }catch(e){}
+
+  // Particles + sfx when dropping a topping
+  try{
+    const zone=document.getElementById('build-drop');
+    zone.addEventListener('pointerup', (ev)=>{
+      const t=ev.target; if(t && t.classList && t.classList.contains('topping-chip')){ emitParticlesAt(t); playPop(); }
+    });
+  }catch(e){}
+})();
+
+// Ensure initial hit-window UI aligns to current order
+try{ const span=document.querySelector('.hit-window span'); if(span && state.order){ const [a,b]=state.order.bake; span.style.left=Math.round(a*100)+'%'; span.style.width=Math.round((b-a)*100)+'%'; span.classList.add('pulse'); } }catch(e){}
