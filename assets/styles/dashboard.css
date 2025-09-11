@@ -2,8 +2,8 @@
 aside{background:rgba(255,255,255,.85); border:2px solid var(--frame); border-radius:12px; padding:12px}
 #center{position:relative; border:2px solid var(--frame); border-radius:12px; background:var(--paper); overflow:hidden}
 
-.scene{position:absolute; inset:0; background:url('images/shop_background.png') center/cover no-repeat}
-.scene.scene-shop{background-image:url('images/shop_background.png')}
+.scene{position:absolute; inset:0; background:url('../images/shop_background.png') center/cover no-repeat}
+.scene.scene-shop{background-image:url('../images/shop_background.png')}
 .order-ticket{position:absolute; top:.5rem; right:.5rem; background:var(--paper); border:2px solid var(--frame); padding:.4rem .7rem; border-radius:8px; font-weight:bold}
 
 /* Banisor (opțional, păstrat) */
