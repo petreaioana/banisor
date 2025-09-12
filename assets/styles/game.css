@@ -17,15 +17,39 @@
 .build-stage{
   position:relative; height:280px; background:#fff; border:2px dashed #e2c48d; border-radius:10px; display:flex; align-items:center; justify-content:center; overflow:hidden;
 }
-.build-base{width:180px; height:180px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.15))}
+.build-base{display:none}
+.dough-canvas{ --dough-size:180px; width:var(--dough-size); height:var(--dough-size); border-radius:50%;
+  background: radial-gradient(50% 50% at 35% 35%, #ffe6b3 0%, #ffd58a 60%, #f2b45a 100%);
+  box-shadow: 0 3px 8px rgba(0,0,0,.18) inset, 0 2px 4px rgba(0,0,0,.15);
+  border:2px solid rgba(150,110,50,.35);
+}
 .build-dropzone{position:absolute; inset:0;}
 .palette{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px}
 .palette button{display:flex; align-items:center; gap:6px; padding:.35rem .45rem; border:1px solid #e2c48d; border-radius:10px; background:#fffef7; cursor:grab}
-.palette img{width:24px;height:24px;object-fit:contain}
+.palette .swatch{display:inline-block; width:20px; height:20px; border-radius:50%; border:1px solid rgba(0,0,0,.15)}
+.palette .swatch.bar{border-radius:4px; width:8px; height:18px}
 
-.topping-chip{position:absolute;width:36px;height:36px;cursor:move;user-select:none; touch-action:none}
+.topping-chip{position:absolute;cursor:move;user-select:none; touch-action:none}
+.chip{--chip-size:28px; width:var(--chip-size); height:var(--chip-size); border-radius:50%;}
+.chip.pop-in{animation:chipPop .18s ease-out}
+@keyframes chipPop{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1);opacity:1}}
+.chip.chocolate_chips{ background: radial-gradient(circle at 35% 35%, #5b3b2c 0%, #3a2a23 80%); }
+.chip.cacao{ background: radial-gradient(circle at 35% 35%, #4e342e 0%, #2d1e1a 80%); }
+.chip.coconut{ background: radial-gradient(circle at 35% 35%, #ffffff 0%, #f1f1f1 70%); border:1px solid #ddd; }
+.chip.strawberries{ background: radial-gradient(circle at 35% 35%, #ff5a5a 0%, #c62828 80%); }
+.chip.sprinkles{ width:8px; height:20px; border-radius:4px; background: linear-gradient(180deg, #ff7ab6, #ffcc66); }
+.chip.sugar{ --chip-size:16px; width:var(--chip-size); height:var(--chip-size); border-radius:4px; background: linear-gradient(180deg, #fff, #eee); border:1px solid #ccc; }
 
 .oven img{width:100%; max-width:320px; display:block; margin:0 auto}
+.oven img{display:none}
+.oven-box{width:100%; max-width:320px; height:180px; margin:0 auto; position:relative; border:2px solid var(--frame); border-radius:12px; background:linear-gradient(180deg,#666,#444); box-shadow:inset 0 6px 12px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25)}
+.oven-box .window{position:absolute; left:10%; right:10%; top:22%; bottom:22%; background:linear-gradient(180deg,#111,#222); border:2px solid #222; border-radius:8px; box-shadow:inset 0 0 20px rgba(0,0,0,.6)}
+.oven-box .door{position:absolute; left:5%; right:5%; top:8%; bottom:8%; border-radius:10px; border:2px solid #222; background:linear-gradient(180deg,#777,#555); box-shadow:inset 0 2px 8px rgba(0,0,0,.5); transform-origin:top left; transition:transform .25s ease}
+.oven-box.open .door{transform:rotateX(60deg)}
+.oven-box.closed .door{transform:rotateX(0deg)}
+.oven-box .handle{position:absolute; left:50%; transform:translateX(-50%); bottom:8%; width:60px; height:10px; background:#222; border-radius:6px}
+/* Shake effect for oven-box */
+#oven-box.shake{animation:shake .35s ease-in-out}
 .progress-container{width:90%;height:20px;background:var(--paper);border:2px solid var(--frame);border-radius:10px;margin:8px auto}
 .progress-bar{height:100%;width:0;background:var(--brand);border-radius:10px;transition:width .08s; position:relative; overflow:hidden}
 .progress-bar.pulse{box-shadow:0 0 10px rgba(255,200,0,.35) inset}

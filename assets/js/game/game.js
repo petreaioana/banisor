@@ -47,7 +47,8 @@ function buildPalette(){
   const wrap=$('#build-palette'); wrap.innerHTML='';
   ING.forEach(ing=>{
     const b=document.createElement('button'); b.type='button';
-    b.innerHTML=`<img src="${ing.icon}" alt=""><span>${ing.name}</span>`;
+    b.innerHTML=`<span class="swatch ${ing.shape||'dot'}" data-id="${ing.id}"></span><span>${ing.name}</span>`;
+    try{ const sw=b.querySelector('.swatch'); if(sw && ing.color){ sw.style.background = ing.color; } }catch(e){}
     b.addEventListener('click', ()=> spawnChip(ing.id));
     wrap.appendChild(b);
   });
@@ -57,12 +58,14 @@ function buildPalette(){
 let __AC=null; function getAC(){ try{ __AC = __AC || new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} return __AC; }
 function playDing(){ try{ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain(); o.type='triangle'; o.frequency.setValueAtTime(880, ac.currentTime); o.frequency.linearRampToValueAtTime(1320, ac.currentTime+0.12); g.gain.setValueAtTime(0.0001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.06, ac.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.2); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+0.22);}catch(e){} }
 function playBuzz(){ try{ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(); const g=ac.createGain(); o.type='sawtooth'; o.frequency.value=220; g.gain.value=0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(e){} },120);}catch(e){} }
-function emitOvenParticles(success=true){ try{ const oi=document.getElementById('oven-img'); if(!oi) return; const r=oi.getBoundingClientRect(); const count= success? 12:6; for(let i=0;i<count;i++){ const d=document.createElement('div'); d.className='particle'; const dx=(Math.random()*60-30)+'px'; const dy=(success? - (20+Math.random()*40): -(10+Math.random()*20))+'px'; d.style.setProperty('--dx', dx); d.style.setProperty('--dy', dy); d.style.left=(r.left + r.width*0.5)+'px'; d.style.top=(r.top + r.height*0.15)+'px'; d.style.background= success? '#f3e38a' : '#d0d0d0'; d.style.position='fixed'; d.style.animation='pop .6s ease-out forwards'; document.body.appendChild(d); setTimeout(()=>d.remove(), 700);} }catch(e){} }
+function emitOvenParticles(success=true){ try{ const oi=document.getElementById('oven-box')||document.getElementById('oven-img'); if(!oi) return; const r=oi.getBoundingClientRect(); const count= success? 12:6; for(let i=0;i<count;i++){ const d=document.createElement('div'); d.className='particle'; const dx=(Math.random()*60-30)+'px'; const dy=(success? - (20+Math.random()*40): -(10+Math.random()*20))+'px'; d.style.setProperty('--dx', dx); d.style.setProperty('--dy', dy); d.style.left=(r.left + r.width*0.5)+'px'; d.style.top=(r.top + r.height*0.15)+'px'; d.style.background= success? '#f3e38a' : '#d0d0d0'; d.style.position='fixed'; d.style.animation='pop .6s ease-out forwards'; document.body.appendChild(d); setTimeout(()=>d.remove(), 700);} }catch(e){} }
 
 function spawnChip(id){
   const zone=$('#build-drop');
-  const img=document.createElement('img');
-  img.src = ING.find(i=>i.id===id)?.icon; img.className='topping-chip'; img.draggable=false;
+  const img=document.createElement('div');
+  // CSS/JS based token
+  try{ img.className='topping-chip chip '+id; if(id==='sprinkles'){ img.style.width='8px'; img.style.height='20px'; img.style.borderRadius='4px'; img.style.transform='rotate('+(Math.floor(Math.random()*360))+'deg)'; } else if(id==='sugar'){ img.style.width='16px'; img.style.height='16px'; img.style.borderRadius='4px'; } else { img.style.width='28px'; img.style.height='28px'; img.style.borderRadius='50%'; } }catch(e){}
+  img.draggable=false;
   // random pos %
   const rx=25+Math.random()*50, ry=25+Math.random()*50;
   img.style.left=rx+'%'; img.style.top=ry+'%';
@@ -101,13 +104,16 @@ function spawnChip(id){
   img.addEventListener('pointerup', end, {passive:true});
 
   zone.appendChild(img);
+  try{ img.classList.add('pop-in'); setTimeout(()=> img.classList.remove('pop-in'), 220); }catch(e){}
   savePlaced();
 }
 
 function savePlaced(){
   const chips=[...document.querySelectorAll('.topping-chip')];
   state.placed = chips.map(el=>{
-    return { id: ING.find(i=> el.src.includes(i.id))?.id || 'unknown', x:parseFloat(el.style.left), y:parseFloat(el.style.top) };
+    let id='unknown';
+    try{ const classes=[...el.classList]; const found = ING.find(i=> classes.includes(i.id)); if(found) id=found.id; }catch(e){}
+    return { id, x:parseFloat(el.style.left), y:parseFloat(el.style.top) };
   });
   $('#build-count').textContent = String(state.placed.length);
   calcTopScore();
@@ -144,13 +150,15 @@ let bakeTimer=null;
 function startBake(){
   if(state.baking.running) return;
   state.baking.running=true; state.baking.t=0; state.baking.p=0; state.baking.inWin=false;
-  $('#oven-img').src='images/oven_open.png';
+  try{ const box=document.getElementById('oven-box'); if(box){ box.classList.add('open'); box.classList.remove('closed'); } else { $('#oven-img').src='images/oven_open.png'; } }catch(e){}
   clearInterval(bakeTimer);
   bakeTimer=setInterval(()=>{
     state.baking.t+=100; const p = clamp(state.baking.t/state.baking.dur, 0, 1);
     state.baking.p = p;
     $('#bake-bar').style.width = (p*100)+'%';
-    if(p>=0.2 && p<0.8) { $('#oven-img').src='images/oven_closed.png'; }
+    if(p>=0.2 && p<0.8) {
+      try{ const box=document.getElementById('oven-box'); if(box){ box.classList.add('closed'); box.classList.remove('open'); } else { $('#oven-img').src='images/oven_closed.png'; } }catch(e){}
+    }
     if(p>=1) stopBake();
   },100);
 }
@@ -162,7 +170,7 @@ function stopBake(){
   const [a,b]=state.baking.zone;
   const inWin = p>=a && p<=b;
   state.baking.inWin = inWin;
-  $('#oven-img').src='images/oven_open.png';
+  try{ const box=document.getElementById('oven-box'); if(box){ box.classList.add('open'); box.classList.remove('closed'); } else { $('#oven-img').src='images/oven_open.png'; } }catch(e){}
   // scor coacere: 100 la centru, scade cu distanța
   const center=(a+b)/2; const d=Math.abs(p-center);
   const maxD=(b-a)/2;
@@ -176,7 +184,11 @@ function stopBake(){
 function computeFinalScores(){
   // Q din 0.82..0.97 bazat pe 60% topping, 40% bake
   const topW = 0.6, bakeW = 0.4;
-  const q = clamp(0.82 + (state.scores.top/100)*0.10*topW + (state.scores.bake/100)*0.10*bakeW, 0.82, 0.97);
+  const topRaw = state.scores.top||0;
+  let penalty = 0;
+  try{ (state.placed||[]).forEach(p=>{ if(p.x<20||p.x>80||p.y<20||p.y>80) penalty+=2; }); }catch(e){}
+  const topAdj = Math.max(0, topRaw - Math.min(30, penalty));
+  const q = clamp(0.82 + (topAdj/100)*0.10*topW + (state.scores.bake/100)*0.10*bakeW, 0.82, 0.97);
   // Cantitate după mărime + nr toppinguri
   const sizeMap={S:8, M:10, L:12}; const qtyBase=sizeMap[state.order.size]||10;
   const qty = clamp(qtyBase + Math.floor(state.placed.length/3), 6, 16);
@@ -227,6 +239,47 @@ $('#btn-next').addEventListener('click', ()=>{ /* focus pe Bake */ startBake(); 
 buildPalette();
 newOrder();
 updateTopbar();
+
+// Build oven-box DOM (vectorized) and hide old image
+(function(){
+  try{
+    const oven=document.querySelector('.oven'); if(!oven) return;
+    if(!document.getElementById('oven-box')){
+      const box=document.createElement('div'); box.id='oven-box'; box.className='oven-box open';
+      box.innerHTML='<div class="window"></div><div class="door"></div><div class="handle"></div>';
+      const img=document.getElementById('oven-img'); if(img) img.style.display='none';
+      oven.insertBefore(box, oven.firstChild);
+    }
+  }catch(e){}
+})();
+
+// Override computeFinalScores to include radial penalty based on dough
+try{
+  const __origCompute = computeFinalScores;
+  window.computeFinalScores = function(){
+    const topW = 0.6, bakeW = 0.4;
+    const topRaw = state?.scores?.top || 0;
+    // radial penalty
+    let penalty = 0;
+    try{
+      const zone=document.getElementById('build-drop'); const dough=document.getElementById('dough-canvas');
+      if(zone && dough){
+        const zr=zone.getBoundingClientRect(); const dr=dough.getBoundingClientRect();
+        const cxPct=((dr.left+dr.width/2 - zr.left)/zr.width)*100;
+        const cyPct=((dr.top+dr.height/2 - zr.top)/zr.height)*100;
+        const rPct=(dr.width/2)/zr.width*100;
+        (state.placed||[]).forEach(p=>{ const dx=p.x - cxPct; const dy=p.y - cyPct; const dist=Math.sqrt(dx*dx+dy*dy); if(dist > (rPct-1)){ penalty += 2 + Math.max(0, (dist - rPct))*0.5; } });
+        penalty = Math.round(Math.min(40, penalty));
+      }
+    }catch(e){}
+    const topAdj = Math.max(0, topRaw - penalty);
+    const q = clamp(0.82 + (topAdj/100)*0.10*topW + ((state?.scores?.bake||0)/100)*0.10*bakeW, 0.82, 0.97);
+    const sizeMap={S:8, M:10, L:12}; const qtyBase=sizeMap[state?.order?.size]||10;
+    const qty = clamp(qtyBase + Math.floor((state?.placed?.length||0)/3), 6, 16);
+    state.scores.q = Number(q.toFixed(2)); state.scores.qty = qty;
+    try{ document.getElementById('score-q').textContent = state.scores.q.toFixed(2); document.getElementById('score-qty').textContent = String(state.scores.qty); }catch(e){}
+  };
+}catch(e){}
 
 // Replace Serve button handler to enforce ingredients & buffs
 (function(){
@@ -337,3 +390,35 @@ try{
     try{ updateTopbar(); }catch(e){}
   }
 }catch(e){}
+// Ensure CSS dough canvas present and size slider works
+(function(){
+  try{
+    const stage=document.querySelector('.build-stage');
+    const base=document.getElementById('build-base'); if(base) base.style.display='none';
+    if(stage && !document.getElementById('dough-canvas')){
+      const drop=document.getElementById('build-drop'); const d=document.createElement('div');
+      d.id='dough-canvas'; d.className='dough-canvas'; stage.insertBefore(d, drop);
+    }
+    const r=document.getElementById('size-range');
+    const apply=(v)=>{ const px = v==1?160: v==2?190:220; const d=document.getElementById('dough-canvas'); if(d) d.style.setProperty('--dough-size', px+'px'); };
+    if(r){ apply(parseInt(r.value||2)); r.addEventListener('input', ()=>apply(parseInt(r.value||2))); }
+  }catch(e){}
+})();
+
+// Final override: Serve without ingredient stock checks
+(function(){
+  try{
+    const old=document.getElementById('btn-serve'); if(!old) return;
+    const btn=old.cloneNode(true); old.parentNode.replaceChild(btn, old);
+    btn.addEventListener('click', ()=>{
+      if(state.baking.running) return;
+      computeFinalScores();
+      const q = state.scores.q || 0.86;
+      const qty = state.scores.qty || 8;
+      try{ FK.addInventory('croissant', qty, q); }catch(e){}
+      try{ if(state.scores.top>=80) FK.addBuff({id:'fastServe', label:'Servire rapida', minutes:30, wBonus:-0.6, trafficMult:1.05}); }catch(e){}
+      try{ toast(`✔ Servit! +${qty} stoc × Q ${q.toFixed(2)}`); }catch(e){}
+      try{ $('#g-stock').textContent = FK.totalStock('croissant'); const S2=FK.getState(); const cnt=(S2.boost?.buffs?.length)||0; $('#g-boost').textContent = Math.round(S2.boost.percent)+'%'+(cnt>0?` (${cnt})`:''); }catch(e){}
+    });
+  }catch(e){}
+})();
