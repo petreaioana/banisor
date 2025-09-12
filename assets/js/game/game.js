@@ -199,7 +199,7 @@ function serveClient(){
   const boost = clamp(Math.round((q-0.85)*180), 6, 28);
   FK.applyBoost(boost);
   toast(`✅ Servit! +${qty} stoc · Q ${q.toFixed(2)} · ⚡ +${boost}%`);
-  updateTopbar();
+updateTopbar();
 }
 
 function updateTopbar(){
@@ -324,4 +324,16 @@ try{
       }
     }catch(e){}
   };
+}catch(e){}
+
+// Override legacy serveClient to remove applyBoost and use addBuff
+try{
+  window.serveClient = function(){
+    const q = state?.scores?.q || 0.86;
+    const qty = state?.scores?.qty || 8;
+    try{ FK.addInventory('croissant', qty, q); }catch(e){}
+    try{ FK.addBuff({id:'fastServe', label:'Servire rapidă', minutes:30, wBonus:-0.6, trafficMult:1.05}); }catch(e){}
+    try{ toast(`✔ Servit! +${qty} stoc × Q ${q.toFixed(2)}`); }catch(e){}
+    try{ updateTopbar(); }catch(e){}
+  }
 }catch(e){}

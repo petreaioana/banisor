@@ -41,9 +41,36 @@ function consumeInventory(qty){
 }
 
 function marketingBoost(){ let m=0; if(S.marketing.flyerDaysLeft>0) m+=0.10; if(S.marketing.socialToday) m+=0.25; return m; }
+function seasonMods(){
+  try{
+    const season=S.world?.season||'primavara'; const def={traffic:1.00, wait:+0.0, q:0.00};
+    if(season==='vara') return {traffic:1.15, wait:+0.5, q:0.00};
+    if(season==='toamna') return {traffic:0.95, wait:+0.0, q:+0.02};
+    if(season==='iarna') return {traffic:0.85, wait:+0.0, q:0.00};
+    return def;
+  }catch(e){ return {traffic:1.00, wait:0, q:0}; }
+}
+function weatherMods(){
+  try{
+    const w=S.economy?.weather||'sunny';
+    if(w==='rain') return {traffic:0.92, wait:+0.2};
+    if(w==='snow') return {traffic:0.88, wait:+0.4};
+    return {traffic:1.00, wait:0};
+  }catch(e){ return {traffic:1.00, wait:0}; }
+}
 function trafficN(){
-  const base = ECON.F_base * (S.economyIndex||1) * (S.reputation||1) * (S.seasonality||1) * (1+marketingBoost());
+  const sm=seasonMods(); const wm=weatherMods();
+  const comp=(S.economy?.competitorIndex)||1.00;
+  const base = ECON.F_base * (S.economyIndex||1) * (S.reputation||1) * sm.traffic * wm.traffic * comp * (1+marketingBoost());
   return Math.round(base * (S.boost?.trafficMult || 1));
+}
+function effectiveMu(){
+  const baseMu=S.capacity.cashierMu + (S.upgrades.posRapid?0.8:0) + Math.max(0, S.staff.cashier-1)*0.5;
+  const team = Array.isArray(S.staff?.team)? S.staff.team : [];
+  const avgSkill = team.length? team.reduce((s,t)=>s+(t.skill||0),0)/team.length : 0.65;
+  const avgMood = team.length? team.reduce((s,t)=>s+(t.mood||0),0)/team.length : 0.80;
+  const factor = 1 + 0.25*(avgSkill-0.6) + 0.2*(avgMood-0.8);
+  return Math.max(0.5, baseMu * factor);
 }
 function waitW(lambda,mu){ return clamp((lambda-mu)*ECON.tau,0,ECON.Wmax); }
 function conversionC(P,P0,Q,W){ const {C0,epsilon,alpha,beta,kappa,delta}=ECON; const priceTerm=Math.exp(-epsilon*(P/P0-1)); const qualityTerm=alpha+beta*Q; const waitPen=1-Math.min(kappa, delta*W); return clamp(C0*priceTerm*qualityTerm*waitPen,0,0.95); }
@@ -61,6 +88,7 @@ function refreshTop(){
   const buffsCount = (S.boost?.buffs?.length)||0;
   elBoost.textContent=Math.round(S.boost.percent)+'%'+(buffsCount>0?` (${buffsCount})`:'');
   try{ if(typeof updateTickerBadge==='function') updateTickerBadge(); }catch(e){}
+  try{ updateSeasonMeteoUI(); }catch(e){}
 }
 function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
   barQ.style.width = Math.round(Math.max(0,Math.min(Q,1))*100)+'%';
@@ -73,7 +101,8 @@ function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
 function stepAuto(){
   if(!S.autosim.running) return;
   const prod=S.products.croissant;
-  S.timeMin += 1;
+  // advance time via WorldClock authority
+  try{ FK.tickMinutes(1); S = FK.getState(); }catch(e){}
 
   const earlyWindow = (S.timeMin - 8*60) < 120;
   if(earlyWindow){
@@ -98,14 +127,15 @@ function stepAuto(){
   const lambdaMin = Nday / DAY_MINUTES;
   const arrivals = (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0);
 
-  const baseMu=S.capacity.cashierMu + (S.upgrades.posRapid?0.8:0) + Math.max(0, S.staff.cashier-1)*0.5;
-  let W = waitW(arrivals, baseMu) + (S.boost.wBonus||0); W = Math.max(0,W);
+  const mu = effectiveMu();
+  const Wextra = seasonMods().wait + weatherMods().wait;
+  let W = waitW(arrivals, mu) + (S.boost.wBonus||0) + Wextra; W = Math.max(0, Math.min(ECON.Wmax, W));
 
   const P0=prod.P0; let P=prod.price;
   const hh = prod.happyHour; const HHs=toMinutes(hh.start), HHe=toMinutes(hh.end);
   if(hh.enabled && S.timeMin>=HHs && S.timeMin<HHe) P = P * (1 - hh.discount);
 
-  const Q=avgQuality() + (S.boost.qBonus||0);
+  const Q=avgQuality() + (S.boost.qBonus||0) + seasonMods().q;
   const C=conversionC(P,P0,Math.max(0,Math.min(Q,1)),W);
 
   const demandMin = Math.round(arrivals * C);
@@ -118,7 +148,7 @@ function stepAuto(){
   S.cash += rev;
 
   // Tick buffs (durată) o dată pe minut de joc
-  FK.tickBuffs(1);
+
 
   FK.setState(S);
   refreshTop();
@@ -133,7 +163,8 @@ function endOfDay(){
   const prod=S.products.croissant; const A=S.autosim.aggregates; const stockLeft=totalStock();
   const holding = stockLeft * 0.10;
   const marketingCost = (S.marketing.socialToday?150:0) + (S.marketing.flyerDaysLeft>0 && !S.today?.chargedFlyer ? 80 : 0);
-  const fixed = 150;
+  const staffWages = (S.staff?.cashier||1) * (S.staff?.wagePerCashier||70);
+  const fixed = 150 + staffWages;
   const profit = A.rev - A.cogs - holding - marketingCost - fixed;
 
   // expirare (simplificată: doar age++)
@@ -158,7 +189,8 @@ function endOfDay(){
   if(S.marketing.flyerDaysLeft>0) S.marketing.flyerDaysLeft--;
   S.marketing.socialToday=false;
   S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0};
-  S.day += 1; S.timeMin = 8*60;
+  // Roll day via WorldClock
+  try{ FK.endOfDayHook(); S = FK.getState(); }catch(e){}
 
   FK.setState(S);
   refreshTop();
@@ -256,11 +288,7 @@ try{
   const st=document.querySelector('#stationbar .station.active'); if(st) st.textContent='Manager';
 }catch(e){}
 
-// Monkey-patch: tick buffs once per in-game minute step
-try{
-  const __origStepAuto = stepAuto;
-  window.stepAuto = function(){ __origStepAuto(); try{ if(FK && FK.tickBuffs) FK.tickBuffs(1); }catch(e){} };
-}catch(e){}
+// Buff ticking handled by WorldClock (FK.tickMinutes); removed extra wrapper
 
 // Wrap addInventory used by Manager early production to respect ingredient stock
 try{
@@ -334,3 +362,159 @@ try{
   // mount once
   try{ mountBuyBtn(); }catch(e){}
 })();
+
+// --- Season & Weather UI ---
+function seasonLabel(s){ return s==='primavara'?'Primăvară': s==='vara'?'Vară': s==='toamna'?'Toamnă':'Iarnă'; }
+function weatherIcon(w){ return w==='rain'?'🌧️': w==='snow'?'❄️':'☀️'; }
+function ensureSeasonCard(){
+  const right = document.querySelector('#right-metrics'); if(!right) return null;
+  let card = document.getElementById('season-card');
+  if(card) return card;
+  card = document.createElement('div'); card.className='panel soft'; card.id='season-card';
+  card.innerHTML = `
+    <h3>Sezon & Meteo</h3>
+    <div class="row tight"><span>Sezon:</span><b id="s-season">-</b></div>
+    <div class="row tight"><span>Zi:</span><b id="s-day">-</b></div>
+    <div class="row tight"><span>Meteo:</span><b id="s-weather">-</b></div>
+    <div class="row tight"><span>Trafic:</span><b id="s-traffic">x1.00</b></div>
+    <div class="row tight"><span>Răbdare:</span><b id="s-wait">+0.0</b></div>
+    <div id="season-cal" class="season-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:.5rem;"></div>
+  `;
+  right.insertBefore(card, right.firstChild);
+  return card;
+}
+function renderSeasonCalendar(day){
+  const cal = document.getElementById('season-cal'); if(!cal) return;
+  cal.innerHTML='';
+  for(let d=1; d<=28; d++){
+    const cell=document.createElement('div');
+    cell.textContent=String(d);
+    Object.assign(cell.style,{textAlign:'center',padding:'4px',border:'1px solid #333',borderRadius:'4px',background:d===day?'#ffd053':'#222',color:'#fff'});
+    cal.appendChild(cell);
+  }
+}
+function updateSeasonMeteoUI(){
+  const card=ensureSeasonCard(); if(!card) return;
+  const s = FK.getState();
+  const season = s.world?.season||'primavara';
+  const day = s.world?.day||1;
+  const w = s.economy?.weather||'sunny';
+  // reuse engine helpers if present
+  const sm = (typeof seasonMods==='function')? seasonMods() : (season==='vara'?{traffic:1.15,wait:0.5,q:0}:{traffic:season==='iarna'?0.85:season==='toamna'?0.95:1.00,wait:0,q:season==='toamna'?0.02:0});
+  const wm = (typeof weatherMods==='function')? weatherMods() : (w==='rain'?{traffic:0.92,wait:0.2}: w==='snow'?{traffic:0.88,wait:0.4}:{traffic:1.00,wait:0});
+  const tMult = (sm.traffic||1)*(wm.traffic||1);
+  const wAdj = (sm.wait||0)+(wm.wait||0);
+  try{ document.getElementById('s-season').textContent = seasonLabel(season); }catch(e){}
+  try{ document.getElementById('s-day').textContent = `${day}/28`; }catch(e){}
+  try{ document.getElementById('s-weather').textContent = `${weatherIcon(w)} ${w}`; }catch(e){}
+  try{ document.getElementById('s-traffic').textContent = `x${(Math.round(tMult*100)/100).toFixed(2)}`; }catch(e){}
+  try{ document.getElementById('s-wait').textContent = `+${wAdj.toFixed(1)} min`; }catch(e){}
+  try{ renderSeasonCalendar(day); }catch(e){}
+}
+
+// Add Export/Import save buttons in topbar (right)
+(function(){
+  function mountSaveBtns(){
+    const right = document.querySelector('#topbar .right'); if(!right) return;
+    if(document.getElementById('btn-export') || document.getElementById('btn-import')) return;
+    const sep=document.createElement('span'); sep.className='sep'; sep.textContent='·';
+    const btnImp=document.createElement('button'); btnImp.id='btn-import'; btnImp.className='btn'; btnImp.textContent='Importă save JSON';
+    const btnExp=document.createElement('button'); btnExp.id='btn-export'; btnExp.className='btn'; btnExp.textContent='Exportă save JSON';
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json'; inp.style.display='none'; inp.id='inp-import';
+    right.appendChild(sep); right.appendChild(inp); right.appendChild(btnImp); right.appendChild(btnExp);
+    btnExp.addEventListener('click', ()=>{ try{ FK.exportJSON(); }catch(e){} });
+    btnImp.addEventListener('click', ()=>{ try{ inp && inp.click(); }catch(e){} });
+    inp.addEventListener('change', ()=>{ try{ const f=inp.files&&inp.files[0]; if(f){ FK.importJSON(f); inp.value=''; } }catch(e){} });
+  }
+  try{ mountSaveBtns(); }catch(e){}
+})();
+
+// --- Season & Weather UI: enhancements (badge + tooltip + DOW) ---
+function ensureSeasonBadge(){
+  try{
+    const left=document.querySelector('#topbar .left'); if(!left) return;
+    if(document.getElementById('season-badge')) return;
+    const badge=document.createElement('span'); badge.id='season-badge';
+    badge.innerHTML='<span class="icon">*</span><span class="lbl">-</span>';
+    const dc=document.getElementById('day-clock');
+    if(dc && dc.nextSibling){ left.insertBefore(badge, dc.nextSibling); } else { left.appendChild(badge); }
+  }catch(e){}
+}
+function updateTopbarBadge(){
+  try{
+    const s=FK.getState(); const season=s.world?.season||'primavara'; const w=s.economy?.weather||'sunny';
+    const el=document.querySelector('#season-badge'); if(!el) return;
+    const icon=(typeof weatherIcon==='function')? weatherIcon(w):'*';
+    el.querySelector('.icon').textContent = icon;
+    el.querySelector('.lbl').textContent = (typeof seasonLabel==='function')? seasonLabel(season):season;
+  }catch(e){}
+}
+function renderSeasonDOW(){
+  try{
+    const dow=document.getElementById('season-dow'); if(!dow) return;
+    if(dow.children.length===7) return;
+    dow.innerHTML=''; const days=['Lu','Ma','Mi','Jo','Vi','Sa','Du'];
+    for(const d of days){ const c=document.createElement('div'); c.className='cell'; c.textContent=d; dow.appendChild(c); }
+  }catch(e){}
+}
+function renderCalendarActive(day){
+  try{
+    const cal=document.getElementById('season-cal'); if(!cal) return;
+    const kids=Array.from(cal.children);
+    if(kids.length===28){
+      kids.forEach((el,i)=>{ el.classList.add('cell'); el.classList.toggle('active', (i+1)===day); el.removeAttribute('style'); });
+    }
+  }catch(e){}
+}
+function upgradeSeasonCard(){
+  try{
+    const card=document.getElementById('season-card'); if(!card) return;
+    if(!document.getElementById('season-dow')){
+      const cal=document.getElementById('season-cal'); if(!cal) return;
+      const dow=document.createElement('div'); dow.id='season-dow'; dow.className='season-dow';
+      cal.parentNode.insertBefore(dow, cal);
+    }
+  }catch(e){}
+}
+// Monkey-patch updateSeasonMeteoUI to add DOW & badge update & tooltip
+try{
+  const __origUpdate = updateSeasonMeteoUI;
+  window.updateSeasonMeteoUI = function(){
+    try{ upgradeSeasonCard(); }catch(e){}
+    try{ __origUpdate(); }catch(e){}
+    try{ const s=FK.getState(); renderSeasonDOW(); renderCalendarActive(s.world?.day||1); }catch(e){}
+    try{ ensureSeasonBadge(); updateTopbarBadge(); }catch(e){}
+  };
+}catch(e){}
+
+// Tooltip for season card (delegated)
+(function(){
+  try{
+    const card = document.getElementById('season-card');
+    const attach = ()=>{
+      const c=document.getElementById('season-card'); if(!c) return;
+      if(c.__tipAttached) return; c.__tipAttached=true;
+      let tip=null; const show=()=>{
+        try{
+          if(tip){ tip.remove(); tip=null; }
+          const s=FK.getState(); const season=s.world?.season||'primavara'; const w=s.economy?.weather||'sunny';
+          const sm=(typeof seasonMods==='function')? seasonMods():{}; const wm=(typeof weatherMods==='function')? weatherMods():{};
+          tip=document.createElement('div'); tip.className='season-tooltip'; tip.id='season-tip';
+          tip.innerHTML = '<div style="font-weight:600; margin-bottom:.2rem;">Detalii multiplicatori</div>'+
+            `<div>Sezon (${(typeof seasonLabel==='function')? seasonLabel(season):season}): trafic x${(sm.traffic||1).toFixed(2)}, rabdare +${(sm.wait||0).toFixed(1)}m, Q +${((sm.q||0)*100).toFixed(0)}pp</div>`+
+            `<div>Meteo (${w}): trafic x${(wm.traffic||1).toFixed(2)}, rabdare +${(wm.wait||0).toFixed(1)}m</div>`;
+          document.body.appendChild(tip);
+          const r=c.getBoundingClientRect(); tip.style.left=(r.left+12)+'px'; tip.style.top=(r.top+8)+'px';
+          const close=(e)=>{ if(tip && !c.contains(e.target) && e.target!==tip){ try{ tip.remove(); tip=null; window.removeEventListener('mousedown', close); }catch(_){} } };
+          window.addEventListener('mousedown', close);
+        }catch(e){}
+      };
+      c.addEventListener('mouseenter', show);
+      c.addEventListener('mouseleave', ()=>{ try{ tip && tip.remove(); tip=null; }catch(e){} });
+    };
+    if(card) attach(); else { setTimeout(attach, 300); }
+  }catch(e){}
+})();
+
+// Initial badge render
+(function(){ try{ ensureSeasonBadge(); updateTopbarBadge(); }catch(e){} })();

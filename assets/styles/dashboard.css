@@ -21,3 +21,19 @@ aside{background:rgba(255,255,255,.85); border:2px solid var(--frame); border-ra
 #stationbar{position:fixed; bottom:0; left:0; width:100%; display:flex; justify-content:center; gap:1rem; padding:.4rem; background:#333; color:#fff; font-size:.9rem}
 #stationbar .station{padding:.3rem .9rem; background:#555; border-radius:6px; color:#fff; text-decoration:none}
 #stationbar .station.active{background:var(--brand); color:#000}
+
+/* Season & Weather UI */
+#season-card h3{margin:0 0 .3rem 0}
+#season-card .row{display:flex; justify-content:space-between; align-items:center}
+.season-dow{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.4rem; font-size:.8rem; opacity:.85}
+.season-dow .cell{text-align:center; padding:2px 0; border:1px solid var(--frame); border-radius:4px; background:#333; color:#fff}
+.season-cal{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.3rem}
+.season-cal .cell{text-align:center; padding:4px 0; border:1px solid var(--frame); border-radius:4px; background:#222; color:#fff}
+.season-cal .cell.active{background:#ffd053; color:#222; font-weight:600}
+
+/* Topbar season badge */
+#season-badge{display:inline-flex; align-items:center; gap:.35rem; margin-left:.5rem; padding:.15rem .4rem; border:1px solid var(--frame); border-radius:6px; background:var(--paper); font-size:.85rem}
+#season-badge .icon{font-size:1rem; line-height:1}
+
+/* Tooltip for season card */
+.season-tooltip{position:absolute; background:#fff; color:#000; border:1px solid #333; border-radius:8px; padding:.4rem .6rem; z-index:99999; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:.85rem}
