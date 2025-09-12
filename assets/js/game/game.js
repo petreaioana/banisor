@@ -48,7 +48,8 @@ function buildPalette(){
   ING.forEach(ing=>{
     const b=document.createElement('button'); b.type='button';
     b.innerHTML=`<span class="swatch ${ing.shape||'dot'}" data-id="${ing.id}"></span><span>${ing.name}</span>`;
-    try{ const sw=b.querySelector('.swatch'); if(sw && ing.color){ sw.style.background = ing.color; } }catch(e){}
+  try{ const sw=b.querySelector('.swatch'); if(sw && ing.color){ sw.style.background = ing.color; } }catch(e){}
+    try{ b.title = ing.name; }catch(e){}
     b.addEventListener('click', ()=> spawnChip(ing.id));
     wrap.appendChild(b);
   });
@@ -97,6 +98,21 @@ function spawnChip(id){
     catch(_){ }
     try{ const ac=getAC(); if(ac && ac.state==='suspended'){ ac.resume().catch(()=>{}); } }catch(_){}
     try{ const ac=getAC(); if(ac) { const o=ac.createOscillator(); const g=ac.createGain(); o.type='square'; o.frequency.value=650+Math.random()*200; g.gain.value=0.05; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>o.stop(), 100);} }catch(_){ }
+    // snap to nearest guide if enabled
+    try{
+      const guides = Array.from(document.querySelectorAll('.guide-dot'));
+      if(guides.length>0){
+        const gr = guides.map(g=> g.getBoundingClientRect());
+        const ir = img.getBoundingClientRect(); const zr = zone.getBoundingClientRect();
+        let best=-1, bestD=1e9;
+        gr.forEach((g,i)=>{ const dx=(g.left+g.width/2) - (ir.left+ir.width/2); const dy=(g.top+g.height/2) - (ir.top+ir.height/2); const d=Math.sqrt(dx*dx+dy*dy); if(d<bestD){ bestD=d; best=i; } });
+        if(best>=0 && bestD < 32){
+          const gx=((gr[best].left+gr[best].width/2 - zr.left)/zr.width)*100;
+          const gy=((gr[best].top+gr[best].height/2 - zr.top)/zr.height)*100;
+          img.style.left = gx+'%'; img.style.top = gy+'%';
+        }
+      }
+    }catch(_){ }
     savePlaced();
   };
   img.addEventListener('pointerdown', start, {passive:true});
@@ -138,6 +154,16 @@ function calcTopScore(){
   }
   state.scores.top = Math.round(pts);
   renderScores();
+}
+
+// Spawn at given percentage coords (helper for auto-place)
+function spawnChipAt(id, xPct, yPct){
+  const zone=$('#build-drop'); if(!zone) return;
+  const img=document.createElement('div');
+  try{ img.className='topping-chip chip '+id; if(id==='sprinkles'){ img.style.width='8px'; img.style.height='20px'; img.style.borderRadius='4px'; img.style.transform='rotate('+(Math.floor(Math.random()*360))+'deg)'; } else if(id==='sugar'){ img.style.width='16px'; img.style.height='16px'; img.style.borderRadius='4px'; } else { img.style.width='28px'; img.style.height='28px'; img.style.borderRadius='50%'; } }catch(e){}
+  img.draggable=false; img.style.left=xPct+'%'; img.style.top=yPct+'%';
+  zone.appendChild(img);
+  try{ img.classList.add('pop-in'); setTimeout(()=> img.classList.remove('pop-in'), 220); }catch(e){}
 }
 
 function renderBuild(){
@@ -244,7 +270,10 @@ updateTopbar();
 (function(){
   try{
     const oven=document.querySelector('.oven'); if(!oven) return;
-    if(!document.getElementById('oven-box')){
+    // If HTML already contains oven-box (cleaned), just ensure visibility
+    const existing=document.getElementById('oven-box');
+    if(existing){ existing.classList.add('open'); existing.classList.remove('closed'); }
+    else{
       const box=document.createElement('div'); box.id='oven-box'; box.className='oven-box open';
       box.innerHTML='<div class="window"></div><div class="door"></div><div class="handle"></div>';
       const img=document.getElementById('oven-img'); if(img) img.style.display='none';
@@ -259,20 +288,39 @@ try{
   window.computeFinalScores = function(){
     const topW = 0.6, bakeW = 0.4;
     const topRaw = state?.scores?.top || 0;
-    // radial penalty
-    let penalty = 0;
+    // radial penalty (outside dough)
+    let outsidePen = 0;
+    let cxPct=50, cyPct=50, rPct=35;
     try{
       const zone=document.getElementById('build-drop'); const dough=document.getElementById('dough-canvas');
       if(zone && dough){
         const zr=zone.getBoundingClientRect(); const dr=dough.getBoundingClientRect();
-        const cxPct=((dr.left+dr.width/2 - zr.left)/zr.width)*100;
-        const cyPct=((dr.top+dr.height/2 - zr.top)/zr.height)*100;
-        const rPct=(dr.width/2)/zr.width*100;
-        (state.placed||[]).forEach(p=>{ const dx=p.x - cxPct; const dy=p.y - cyPct; const dist=Math.sqrt(dx*dx+dy*dy); if(dist > (rPct-1)){ penalty += 2 + Math.max(0, (dist - rPct))*0.5; } });
-        penalty = Math.round(Math.min(40, penalty));
+        cxPct=((dr.left+dr.width/2 - zr.left)/zr.width)*100;
+        cyPct=((dr.top+dr.height/2 - zr.top)/zr.height)*100;
+        rPct=(dr.width/2)/zr.width*100;
+        (state.placed||[]).forEach(p=>{ const dx=p.x - cxPct; const dy=p.y - cyPct; const dist=Math.sqrt(dx*dx+dy*dy); if(dist > (rPct-1)){ outsidePen += 2 + Math.max(0, (dist - rPct))*0.5; } });
+        outsidePen = Math.round(Math.min(40, outsidePen));
       }
     }catch(e){}
-    const topAdj = Math.max(0, topRaw - penalty);
+    // clustering penalty (small nearest-neighbor distance) and uniform bonus (angular spread)
+    let clusterPen = 0, uniformBonus = 0;
+    try{
+      const pts = (state.placed||[]);
+      if(pts.length>=2){
+        // NN distance average
+        const dists = pts.map((p,i)=>{
+          let min=1e9; pts.forEach((q,j)=>{ if(i===j) return; const dx=p.x-q.x, dy=p.y-q.y; const d=Math.sqrt(dx*dx+dy*dy); if(d<min) min=d; }); return min; });
+        const avgNN = dists.reduce((a,b)=>a+b,0)/dists.length; clusterPen = Math.max(0, 8-avgNN)*1.2; if(clusterPen>10) clusterPen=10;
+        // angular coverage
+        const ang = pts.map(p=> Math.atan2(p.y-cyPct, p.x-cxPct));
+        const C = ang.reduce((s,a)=> s+Math.cos(a), 0)/pts.length;
+        const S = ang.reduce((s,a)=> s+Math.sin(a), 0)/pts.length;
+        const R = Math.sqrt(C*C+S*S); // 0 uniform, 1 concentrated
+        const uniformity = 1 - R; uniformBonus = Math.min(10, Math.max(0, uniformity*12));
+      }
+    }catch(e){}
+    const penalty = Math.max(0, Math.round(outsidePen + clusterPen - uniformBonus));
+    const topAdj = Math.max(0, topRaw - Math.min(40, penalty));
     const q = clamp(0.82 + (topAdj/100)*0.10*topW + ((state?.scores?.bake||0)/100)*0.10*bakeW, 0.82, 0.97);
     const sizeMap={S:8, M:10, L:12}; const qtyBase=sizeMap[state?.order?.size]||10;
     const qty = clamp(qtyBase + Math.floor((state?.placed?.length||0)/3), 6, 16);
@@ -372,7 +420,7 @@ try{
     __origStop();
     try{
       if(state && state.baking && typeof state.baking.inWin==='boolean'){
-        if(state.baking.inWin){ playDing(); emitOvenParticles(true); }
+        if(state.baking.inWin){ playDing(); emitOvenParticles(true); try{ const d=document.getElementById('dough-canvas'); if(d){ d.classList.add('perfect-glow'); setTimeout(()=> d.classList.remove('perfect-glow'), 1800); } }catch(e){} }
         else { playBuzz(); emitOvenParticles(false); }
       }
     }catch(e){}
@@ -395,13 +443,59 @@ try{
   try{
     const stage=document.querySelector('.build-stage');
     const base=document.getElementById('build-base'); if(base) base.style.display='none';
-    if(stage && !document.getElementById('dough-canvas')){
-      const drop=document.getElementById('build-drop'); const d=document.createElement('div');
-      d.id='dough-canvas'; d.className='dough-canvas'; stage.insertBefore(d, drop);
-    }
+    // if canvas already exists in HTML, just ensure it's present
     const r=document.getElementById('size-range');
     const apply=(v)=>{ const px = v==1?160: v==2?190:220; const d=document.getElementById('dough-canvas'); if(d) d.style.setProperty('--dough-size', px+'px'); };
     if(r){ apply(parseInt(r.value||2)); r.addEventListener('input', ()=>apply(parseInt(r.value||2))); }
+  }catch(e){}
+})();
+
+// Guides + density UI
+(function(){
+  try{
+    const dens=document.getElementById('density-range'); const label=document.getElementById('density-label'); const toggle=document.getElementById('toggle-guides');
+    const update=()=>{ if(label && dens){ label.textContent=String(dens.value); } if(toggle && toggle.checked){ renderGuides(); } else { clearGuides(); } };
+    function clearGuides(){ try{ document.querySelectorAll('.guide-dot').forEach(n=>n.remove()); }catch(e){} }
+    function renderGuides(){
+      clearGuides();
+      const zone=document.getElementById('build-drop'); const dough=document.getElementById('dough-canvas'); if(!zone||!dough) return;
+      const zr=zone.getBoundingClientRect(); const dr=dough.getBoundingClientRect();
+      const cx=((dr.left+dr.width/2 - zr.left)/zr.width)*100; const cy=((dr.top+dr.height/2 - zr.top)/zr.height)*100; const r=(dr.width/2)/zr.width*100*0.78;
+      const n = Math.max(4, Math.min(30, parseInt(dens?.value||10)));
+      for(let i=0;i<n;i++){
+        const a = (i/n)*Math.PI*2 + (Math.random()*0.6-0.3);
+        const rr = r * (0.65 + Math.random()*0.35);
+        const x = cx + rr*Math.cos(a);
+        const y = cy + rr*Math.sin(a);
+        const dot=document.createElement('div'); dot.className='guide-dot'; dot.style.left=x+'%'; dot.style.top=y+'%'; zone.appendChild(dot);
+      }
+    }
+    if(dens){ dens.addEventListener('input', update); }
+    if(toggle){ toggle.addEventListener('change', update); }
+    update();
+
+    // Auto-place button
+    const btn = document.getElementById('btn-autoplace');
+    if(btn){ btn.addEventListener('click', ()=>{
+      try{
+        const target = Math.max(4, Math.min(30, parseInt(dens?.value||10)));
+        const need = Math.max(0, target - (state.placed?.length||0));
+        if(need<=0) return;
+        const zone=document.getElementById('build-drop'); const dough=document.getElementById('dough-canvas'); if(!zone||!dough) return;
+        const zr=zone.getBoundingClientRect(); const dr=dough.getBoundingClientRect();
+        const cx=((dr.left+dr.width/2 - zr.left)/zr.width)*100; const cy=((dr.top+dr.height/2 - zr.top)/zr.height)*100; const r=(dr.width/2)/zr.width*100*0.80;
+        const tops = (state.order?.tops?.length>0)? state.order.tops : ['chocolate_chips','strawberries','cacao','sugar'];
+        for(let i=0;i<need;i++){
+          const a = (i/need)*Math.PI*2 + (Math.random()*0.6-0.3);
+          const rr = r * (0.55 + Math.random()*0.35);
+          const x = cx + rr*Math.cos(a);
+          const y = cy + rr*Math.sin(a);
+          const id = tops[i%tops.length];
+          spawnChipAt(id, x, y);
+        }
+        savePlaced();
+      }catch(e){}
+    }); }
   }catch(e){}
 })();
 
