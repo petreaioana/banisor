@@ -1,39 +1,112 @@
-.layout{display:grid; grid-template-columns:310px 1fr 320px; gap:12px; padding:12px; min-height:calc(100vh - 56px)}
-aside{background:rgba(255,255,255,.85); border:2px solid var(--frame); border-radius:12px; padding:12px}
-#center{position:relative; border:2px solid var(--frame); border-radius:12px; background:var(--paper); overflow:hidden}
+/* assets/styles/dashboard.css */
+/* =====================================================
+   FinKids Tycoon — Dashboard (autosim)
+   - layout 3 coloane
+   - scenă centrală (shop)
+   - card metrici live + carduri sezon/evenimente/quests
+   - bară stații jos
+   - responsive tweaks
+   ===================================================== */
 
-.scene{position:absolute; inset:0; background:url('../../images/shop_background.png') center/cover no-repeat}
-.scene.scene-shop{background-image:url('../../images/shop_background.png')}
-.order-ticket{position:absolute; top:.5rem; right:.5rem; background:var(--paper); border:2px solid var(--frame); padding:.4rem .7rem; border-radius:8px; font-weight:bold}
+/* Layout principal: stânga controale, centru scenă, dreapta metrici */
+.layout{
+  display:grid;
+  grid-template-columns:310px 1fr 320px;
+  gap:12px;
+  padding:12px;
+  min-height:calc(100vh - 56px);
+}
 
-/* Banisor (opțional, păstrat) */
-.banisor-counter{position:absolute; bottom:1rem; left:1rem; text-align:center}
-.banisor-sprite{width:120px;height:120px;display:inline-block}
-.banisor-sprite svg{width:100%;height:100%;display:block}
-.banisor-sprite .hand-wave{transform-box:fill-box;transform-origin:left center;animation:hand-wave 2s ease-in-out infinite}
-@keyframes hand-wave{0%,100%{transform:rotate(0)}25%{transform:rotate(18deg)}50%{transform:rotate(-10deg)}75%{transform:rotate(14deg)}}
-.banisor-sprite .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
-@keyframes blink{0%,92%,100%{transform:scaleY(1)}94%{transform:scaleY(.05)}96%{transform:scaleY(1)}}
-.banisor-sprite .hat{transform-box:fill-box;transform-origin:center;animation:hat-bob 2s ease-in-out infinite}
-@keyframes hat-bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.5px) rotate(-3deg)}}
+/* Panouri laterale */
+aside{
+  background:rgba(255,255,255,.85);
+  border:2px solid var(--frame);
+  border-radius:12px;
+  padding:12px;
+}
 
-/* Station bar jos */
-#stationbar{position:fixed; bottom:0; left:0; width:100%; display:flex; justify-content:center; gap:1rem; padding:.4rem; background:#333; color:#fff; font-size:.9rem}
-#stationbar .station{padding:.3rem .9rem; background:#555; border-radius:6px; color:#fff; text-decoration:none}
+/* Centru: scenă magazin */
+#center{
+  position:relative;
+  border:2px solid var(--frame);
+  border-radius:12px;
+  background:var(--paper);
+  overflow:hidden;
+}
+
+/* Scena grafică */
+.scene{
+  position:absolute;
+  inset:0;
+  background:url('../../images/shop_background.png') center/cover no-repeat;
+}
+.scene.scene-shop{ background-image:url('../../images/shop_background.png'); }
+
+/* Bilet/ticker comandă/manager */
+.order-ticket{
+  position:absolute;
+  top:.5rem;
+  right:.5rem;
+  background:var(--paper);
+  border:2px solid var(--frame);
+  padding:.4rem .7rem;
+  border-radius:8px;
+  font-weight:bold;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+
+/* Banisor (sprite în colț) */
+.banisor-counter{
+  position:absolute;
+  bottom:1rem;
+  left:1rem;
+  text-align:center;
+}
+
+/* Controale stânga */
+#left-controls .hint{font-size:.85rem; color:#444}
+#left-controls .grid label{display:flex; align-items:center; gap:.4rem}
+
+/* Metrici dreapta */
+#right-metrics h3{margin-top:0}
+#right-metrics .metric{margin:.5rem 0}
+#right-metrics .metric .label{font-size:.9rem; color:#444; margin-bottom:.25rem}
+#right-metrics .panel.soft{margin-top:.5rem}
+
+/* Carduri Sezon/Evenimente/Quests (montate din JS) */
+#card-season h3,
+#card-events h3,
+#card-quests h3{margin:0 0 .35rem}
+
+/* Bara stații jos (nav rapid) */
+#stationbar{
+  position:fixed;
+  bottom:0; left:0; width:100%;
+  display:flex; justify-content:center; gap:1rem;
+  padding:.4rem;
+  background:#333; color:#fff; font-size:.9rem;
+  z-index:999;
+}
+#stationbar .station{
+  padding:.3rem .9rem;
+  background:#555;
+  border-radius:6px;
+  color:#fff;
+  text-decoration:none;
+}
 #stationbar .station.active{background:var(--brand); color:#000}
 
-/* Season & Weather UI */
-#season-card h3{margin:0 0 .3rem 0}
-#season-card .row{display:flex; justify-content:space-between; align-items:center}
-.season-dow{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.4rem; font-size:.8rem; opacity:.85}
-.season-dow .cell{text-align:center; padding:2px 0; border:1px solid var(--frame); border-radius:4px; background:#333; color:#fff}
-.season-cal{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.3rem}
-.season-cal .cell{text-align:center; padding:4px 0; border:1px solid var(--frame); border-radius:4px; background:#222; color:#fff}
-.season-cal .cell.active{background:#ffd053; color:#222; font-weight:600}
+/* Buton viteză evidențiat (supliment) */
+.speed-btn{background:#fff3c8}
+.speed-btn.active{outline:2px solid #000}
 
-/* Topbar season badge */
-#season-badge{display:inline-flex; align-items:center; gap:.35rem; margin-left:.5rem; padding:.15rem .4rem; border:1px solid var(--frame); border-radius:6px; background:var(--paper); font-size:.85rem}
-#season-badge .icon{font-size:1rem; line-height:1}
-
-/* Tooltip for season card */
-.season-tooltip{position:absolute; background:#fff; color:#000; border:1px solid #333; border-radius:8px; padding:.4rem .6rem; z-index:99999; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:.85rem}
+/* Responsive */
+@media (max-width: 1100px){
+  .layout{ grid-template-columns: 280px 1fr; }
+  #right-metrics{ display:none; }
+}
+@media (max-width: 780px){
+  .layout{ grid-template-columns: 1fr; }
+  aside{ order:2 }
+  #center{ order:1; min-height: 52vh; }
+}
