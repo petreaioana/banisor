@@ -1,11 +1,9 @@
 // assets/js/game/game.js
 // =====================================================
-// FinKids Tycoon — Joc manual (Turnare → Decor → Coacere → Servire)
-// - Canvas 100% HTML/CSS (cerc / inimă / stea)
-// - FSM simplă: pour → decorate → bake → serve (controale vizibile pe etapă)
-// - O singură coacere per comandă (lock după stop)
-// - Scoruri: turnare, decor, coacere → Q & qty
-// - Integrare FK (consum rețetă + add inventory) cu gărzi defensive
+// FinKids Tycoon — Manual Game (Pour → Decorate → Bake → Serve)
+//  - Canvas auto-construit & self-healing (fără NPE-uri)
+//  - FSM simplă, scoruri, Q & qty
+//  - Fără verificare de stoc la servire (doar încearcă consume+add)
 // =====================================================
 
 import { FK } from '../shared/state.js';
@@ -14,6 +12,9 @@ import { FK } from '../shared/state.js';
 const $  = (s)=>document.querySelector(s);
 const $$ = (s)=>Array.from(document.querySelectorAll(s));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const onNextTick = (fn)=> requestAnimationFrame(()=>setTimeout(fn,0));
+
+function qid(id){ return document.getElementById(id); }
 
 // ---------- Ingrediente ----------
 const ING = [
@@ -49,7 +50,7 @@ function playDing(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillat
 function playBuzz(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(), g=ac.createGain(); o.type='sawtooth'; o.frequency.value=220; g.gain.value=0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(_){ } },120); }
 function playPlop(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.value=560+Math.random()*160; g.gain.value=0.04; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(_){ } },90); }
 
-// ---------- Particule / toast ----------
+// ---------- Toast & particule ----------
 function toast(msg){
   let host=$('.toast-container');
   if(!host){ host=document.createElement('div'); host.className='toast-container'; document.body.appendChild(host); }
@@ -91,12 +92,29 @@ function ovenPuff(success){
   confettiAt(r.left+r.width*0.5, r.top+r.height*0.15, success?16:8);
 }
 
-// ---------- Bootstrap canvas (previne NPE) ----------
-function ensureCanvas(){
-  const stage=document.querySelector('.build-stage');
-  if(!stage) return;
+// ---------- Self-healing DOM ----------
+let canvasObserver = null;
 
-  if(!$('#shape-mold')){
+function ensureStage(){
+  let stage = $('.build-stage');
+  if(!stage){
+    // fallback: dacă nu există în markup, îl creăm într-o secțiune discretă
+    const sec = document.createElement('section');
+    sec.className = 'game-panel';
+    const h = document.createElement('h3'); h.textContent = 'Stație de lucru';
+    stage = document.createElement('div'); stage.className = 'build-stage';
+    sec.appendChild(h); sec.appendChild(stage);
+    // dacă există un main, punem aici, altfel direct în body
+    const main = $('main') || document.body;
+    main.appendChild(sec);
+  }
+  return stage;
+}
+
+function ensureCanvas(){
+  const stage = ensureStage();
+  // formă + umplere
+  if(!qid('shape-mold')){
     const mold=document.createElement('div');
     mold.id='shape-mold'; mold.className='shape shape--circle';
     mold.innerHTML=`
@@ -105,12 +123,28 @@ function ensureCanvas(){
     `;
     stage.appendChild(mold);
   }
-  if(!$('#dropzone')){
+  // dropzone toppinguri
+  if(!qid('dropzone')){
     const dz=document.createElement('div');
     dz.id='dropzone'; dz.className='build-dropzone';
     dz.setAttribute('aria-label','Plasare toppinguri');
     stage.appendChild(dz);
   }
+  return stage;
+}
+
+function watchCanvas(){
+  if(canvasObserver) return;
+  canvasObserver = new MutationObserver(()=>{
+    // dacă a dispărut oricare din cele 3, refă tot și re-randează local
+    if(!$('.build-stage') || !qid('shape-mold') || !qid('dropzone')){
+      ensureCanvas();
+      renderBuildFromState();
+      updateMold();
+      updateFillUI();
+    }
+  });
+  canvasObserver.observe(document.body, { childList:true, subtree:true });
 }
 
 // ---------- UI helpers ----------
@@ -133,8 +167,8 @@ function setPhase(next){
   });
 
   // Butoane
-  const btnStart=$('#btn-bake-start');
-  const btnStop =$('#btn-bake-stop') ;
+  const btnStart=$('#btn-bake-start')||$('#btn-bake');
+  const btnStop =$('#btn-bake-stop') ||$('#btn-stop');
   const btnServe=$('#btn-serve');
 
   const canBakeStart = next==='bake' && !state.baking.locked && !state.baking.running;
@@ -147,6 +181,7 @@ function setPhase(next){
 }
 
 function updateMold(){
+  ensureCanvas();
   const mold=$('#shape-mold'); if(!mold || !state.order) return;
   mold.className='shape shape--'+(state.order.shape||'circle');
   const px = state.sizeKey==='S'?160 : state.sizeKey==='L'?240 : 200;
@@ -157,6 +192,7 @@ function updateMold(){
 }
 
 function updateFillUI(){
+  ensureCanvas();
   const fill=$('#shape-fill'); if(!fill || !state.order) return;
   const pct=clamp(state.fillPct,0,1);
   fill.style.height=Math.round(pct*100)+'%';
@@ -208,6 +244,7 @@ function styleChip(el, type){
 }
 
 function spawnChip(id){
+  ensureCanvas();
   const zone=$('#dropzone'); if(!zone) return;
   const chip=document.createElement('div');
   chip.className='chip'; chip.dataset.type=id;
@@ -286,8 +323,8 @@ function startBake(){
   if(state.baking.locked || state.baking.running) return;
 
   state.baking.running=true; state.baking.p=0;
-  ($('#btn-bake-start'))?.setAttribute('disabled','true');
-  ($('#btn-bake-stop') ) ?.removeAttribute('disabled');
+  ($('#btn-bake-start')||$('#btn-bake'))?.setAttribute('disabled','true');
+  ($('#btn-bake-stop') ||$('#btn-stop')) ?.removeAttribute('disabled');
   $('#oven-img')?.setAttribute('src','images/oven_closed.png');
 
   const bar=$('#bake-bar'); clearInterval(bakeTimer);
@@ -306,7 +343,7 @@ function stopBake(){
   state.baking.running=false;
   clearInterval(bakeTimer); bakeTimer=null;
 
-  ($('#btn-bake-stop'))?.setAttribute('disabled','true');
+  ($('#btn-bake-stop')||$('#btn-stop'))?.setAttribute('disabled','true');
   $('#oven-img')?.setAttribute('src','images/oven_open.png');
 
   const p=state.baking.p, [a,b]=state.baking.zone;
@@ -345,25 +382,23 @@ function renderScores(){
   $('#score-bake')  && ($('#score-bake').textContent  = String(state.scores.bake));
   $('#score-q')     && ($('#score-q').textContent     = (state.scores.q||0).toFixed(2));
   $('#score-qty')   && ($('#score-qty').textContent   = String(state.scores.qty||0));
-
-  // Serve panel mirroring
   $('#score-q-serve')   && ($('#score-q-serve').textContent   = (state.scores.q||0).toFixed(2));
   $('#score-qty-serve') && ($('#score-qty-serve').textContent = String(state.scores.qty||0));
 }
 
-// ---------- Serve ----------
+// ---------- Serve (fără verificare de stoc) ----------
 function serveClient(){
   if(state.phase!=='serve'){ toast('Finalizează coacerea înainte de servire.'); return; }
 
   computeFinalScores();
   const q=state.scores.q||0.86, qty=state.scores.qty||8;
 
+  // Info produs (opțional)
   const S = FK.getState ? FK.getState() : {};
   const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'produs';
   const rid = (S.products?.[k]?.recipeId) || (S.products?.[k]?.recipe_id) || 'recipe_default';
 
-  if(FK.canProduce && !FK.canProduce(rid, qty)){ toast('⚠️ Stoc ingrediente insuficient'); return; }
-
+  // FĂRĂ canProduce — doar încearcă, erorile sunt ignorate
   try{ FK.consumeFor && FK.consumeFor(rid, qty); }catch(_){}
   try{ FK.addInventory && FK.addInventory(k, qty, q); }catch(_){}
 
@@ -413,6 +448,9 @@ function renderOrder(){
 
 // ---------- Order nou ----------
 function newOrder(){
+  // asigură canvas înainte de orice
+  ensureCanvas();
+
   // mărime curentă din slider
   const map={1:'S',2:'M',3:'L'};
   const slider=$('#size-range');
@@ -444,21 +482,24 @@ function newOrder(){
   state.baking={ running:false, dur:2800+Math.floor(Math.random()*900), p:0, zone:[...state.order.bake], inWin:false, attempted:false, locked:false };
   state.scores={ pour:0, top:0, bake:0, q:0, qty:0 };
 
-  // UI
-  const sel=$('#shape-select'); if(sel) sel.value=shape;
-  updateMold();
-  updateFillUI();
-  renderOrder();
-  renderBuildFromState();   // reconstrucție canvas
-  updateHitWindowUI();
-  renderScores();
-  updateTopbar();
+  // UI (pe next tick ca să fie layout stabil)
+  onNextTick(()=>{
+    const sel=$('#shape-select'); if(sel) sel.value=shape;
+    updateMold();
+    updateFillUI();
+    renderOrder();
+    renderBuildFromState();
+    updateHitWindowUI();
+    renderScores();
+    updateTopbar();
+  });
 }
 
 // ---------- Reconstrucție chips ----------
 function renderBuildFromState(){
+  ensureCanvas();
   const zone=$('#dropzone'); if(!zone) return;
-  zone.innerHTML=''; // <- sigur aici (zone există, creat de ensureCanvas)
+  zone.innerHTML='';
 
   state.placed.forEach(p=>{
     const chip=document.createElement('div');
@@ -481,9 +522,6 @@ function renderBuildFromState(){
   $('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));
   $('#build-count')  && ($('#build-count').textContent  = String(state.placed.length));
 }
-
-// Backward-compat pentru cod vechi care ar apela "renderBuild"
-function renderBuild(){ renderBuildFromState(); }
 
 // ---------- Evenimente ----------
 function wireEvents(){
@@ -517,8 +555,8 @@ function wireEvents(){
   $('#shape-select')?.addEventListener('change', (e)=>{ if(!state.order) return; state.order.shape = e.target.value||'circle'; updateMold(); });
 
   // Bake
-  ($('#btn-bake-start'))?.addEventListener('click', startBake);
-  ($('#btn-bake-stop') ) ?.addEventListener('click', stopBake);
+  ($('#btn-bake-start')||$('#btn-bake'))?.addEventListener('click', startBake);
+  ($('#btn-bake-stop') ||$('#btn-stop')) ?.addEventListener('click', stopBake);
   document.addEventListener('keydown', (e)=>{ if(e.code==='Space' && state.phase==='bake'){ e.preventDefault(); if(state.baking.running) stopBake(); } });
 
   // Serve
@@ -530,7 +568,9 @@ function wireEvents(){
 
 // ---------- Init ----------
 function mount(){
-  ensureCanvas();    // creează forma + dropzone dacă lipsesc
+  // self-heal înainte de orice
+  ensureCanvas();
+  watchCanvas();
   wireEvents();
 
   // Eticheta mărime inițială
@@ -538,12 +578,17 @@ function mount(){
   const slider=$('#size-range');
   if($('#size-label') && slider) $('#size-label').textContent = map[ Number(slider.value||2) ] || 'M';
 
-  newOrder();             // pregătește prima comandă
+  newOrder();
   updateHitWindowUI();
   setPhase('pour');
   updateTopbar();
 
   try{ setInterval(updateTopbar, 2000); }catch(_){}
 }
-function ready(fn){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
-ready(mount);
+
+// rulează cât mai sigur după parse & un tick de layout
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', ()=> onNextTick(mount));
+}else{
+  onNextTick(mount);
+}
