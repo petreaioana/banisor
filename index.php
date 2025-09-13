@@ -69,7 +69,7 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
   <title>FinKids Tycoon — Dashboard</title>
 
   <!-- Preload imagini de scenă -->
-  <link rel="preload" as="image" href="images/shop_background.png" />
+  <link rel="preload" as="image" href="dashboard_assets/images/shop_background.png" />
 
   <!-- Stiluri -->
   <link rel="stylesheet" href="dashboard_assets/styles/base.css" />
