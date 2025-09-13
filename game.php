@@ -246,7 +246,7 @@ fk_boot();
   <!-- Topbar -->
   <header id="topbar" role="banner" aria-label="Bară de navigare joc">
     <div class="left">
-      <a class="brand" href="#">🍪 FinKids Tycoon</a>
+      <a class="brand" href="index.php">🍪 FinKids Tycoon</a>
       <span class="sep">•</span>
       <button id="btn-audio" class="btn secondary" aria-pressed="true" title="Sunet ON/OFF">🔊 Sunet</button>
       <span class="sep">•</span>
