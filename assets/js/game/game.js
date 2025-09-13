@@ -133,8 +133,8 @@ function setPhase(next){
   });
 
   // Butoane
-  const btnStart=$('#btn-bake-start')||$('#btn-bake');
-  const btnStop =$('#btn-bake-stop') ||$('#btn-stop');
+  const btnStart=$('#btn-bake-start');
+  const btnStop =$('#btn-bake-stop') ;
   const btnServe=$('#btn-serve');
 
   const canBakeStart = next==='bake' && !state.baking.locked && !state.baking.running;
@@ -286,8 +286,8 @@ function startBake(){
   if(state.baking.locked || state.baking.running) return;
 
   state.baking.running=true; state.baking.p=0;
-  ($('#btn-bake-start')||$('#btn-bake'))?.setAttribute('disabled','true');
-  ($('#btn-bake-stop') ||$('#btn-stop')) ?.removeAttribute('disabled');
+  ($('#btn-bake-start'))?.setAttribute('disabled','true');
+  ($('#btn-bake-stop') ) ?.removeAttribute('disabled');
   $('#oven-img')?.setAttribute('src','images/oven_closed.png');
 
   const bar=$('#bake-bar'); clearInterval(bakeTimer);
@@ -306,7 +306,7 @@ function stopBake(){
   state.baking.running=false;
   clearInterval(bakeTimer); bakeTimer=null;
 
-  ($('#btn-bake-stop')||$('#btn-stop'))?.setAttribute('disabled','true');
+  ($('#btn-bake-stop'))?.setAttribute('disabled','true');
   $('#oven-img')?.setAttribute('src','images/oven_open.png');
 
   const p=state.baking.p, [a,b]=state.baking.zone;
@@ -517,8 +517,8 @@ function wireEvents(){
   $('#shape-select')?.addEventListener('change', (e)=>{ if(!state.order) return; state.order.shape = e.target.value||'circle'; updateMold(); });
 
   // Bake
-  ($('#btn-bake-start')||$('#btn-bake'))?.addEventListener('click', startBake);
-  ($('#btn-bake-stop') ||$('#btn-stop')) ?.addEventListener('click', stopBake);
+  ($('#btn-bake-start'))?.addEventListener('click', startBake);
+  ($('#btn-bake-stop') ) ?.addEventListener('click', stopBake);
   document.addEventListener('keydown', (e)=>{ if(e.code==='Space' && state.phase==='bake'){ e.preventDefault(); if(state.baking.running) stopBake(); } });
 
   // Serve
