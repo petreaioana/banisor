@@ -6,15 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FinKids Tycoon — Joc manual</title>
 
-  <!-- Stiluri comune + joc -->
+  <!-- Stiluri -->
   <link rel="stylesheet" href="assets/styles/base.css" />
   <link rel="stylesheet" href="assets/styles/game.css" />
 
-  <!-- Preload imagini folosite la cuptor -->
+  <!-- Preload imagini pentru cuptor -->
   <link rel="preload" as="image" href="images/oven_open.png" />
   <link rel="preload" as="image" href="images/oven_closed.png" />
 
-  <!-- Joc manual (FSM + integrare FK) -->
+  <!-- Logica jocului manual -->
   <script type="module" src="assets/js/game/game.js" defer></script>
 </head>
 <body>
@@ -34,26 +34,24 @@
     </div>
   </header>
 
-  <!-- Stepper (etape) -->
+  <!-- Stepper (etape) — game.js îl va actualiza -->
   <nav id="stepper" aria-label="Etape joc">
     <ol>
-      <li data-phase="order"    class="active">Comandă</li>
-      <li data-phase="pour">Turnare</li>
-      <li data-phase="decorate">Decor</li>
-      <li data-phase="bake">Coacere</li>
-      <li data-phase="serve">Servire</li>
+      <li data-phase="pour" class="active">🫙 Turnare</li>
+      <li data-phase="decorate">🍬 Decor</li>
+      <li data-phase="bake">🔥 Coacere</li>
+      <li data-phase="serve">🧁 Servire</li>
     </ol>
   </nav>
 
   <!-- Conținut joc -->
   <main class="game-layout" role="main">
-    <!-- Col stânga: Comandă -->
+    <!-- Stânga: Comandă -->
     <section class="game-panel" aria-labelledby="h-order">
       <h3 id="h-order">Comandă curentă</h3>
 
       <div id="order-card" class="order-card" aria-live="polite">
         <div class="row tight">
-          <div><b>Formă:</b> <span id="ord-shape">cerc</span></div>
           <div><b>Mărime:</b> <span id="ord-size">M</span></div>
         </div>
         <div style="margin-top:.25rem"><b>Toppinguri cerute:</b>
@@ -62,6 +60,7 @@
         <div style="margin-top:.25rem"><b>Țintă coacere:</b>
           <span id="ord-bake">-</span>
         </div>
+        <!-- game.js va completa și linia de formă/turnare -->
       </div>
 
       <div class="row" style="margin-top:.5rem">
@@ -70,7 +69,7 @@
 
       <hr>
 
-      <!-- Ajutor prietenos -->
+      <!-- Tips prietenoase -->
       <div class="panel soft small">
         <b>Tips de la Bănișor:</b>
         <ul style="margin:.25rem 0 .25rem 1.2rem">
@@ -79,79 +78,58 @@
           <li>Oprește cuptorul în fereastra verde pentru bonus ✨.</li>
         </ul>
       </div>
+
+      <hr>
+
+      <!-- Scoruri rapide -->
+      <div class="panel soft small">
+        <div>Scor decor: <b id="score-top">0</b>/100</div>
+        <div>Scor coacere: <b id="score-bake">0</b>/100</div>
+        <div>Calitate Q: <b id="score-q">0.00</b></div>
+        <div>Cantitate: <b id="score-qty">0</b> buc</div>
+      </div>
     </section>
 
-    <!-- Col centru: Canvas (HTML/CSS shapes) + unelte -->
+    <!-- Centru: Canvas + unelte -->
     <section class="game-panel" aria-labelledby="h-canvas">
       <h3 id="h-canvas">Stație de lucru</h3>
 
-      <!-- CANVAS 100% HTML/CSS -->
-      <div id="canvas" class="build-stage" aria-live="polite" aria-label="Zonă de lucru prăjitură">
-        <!-- matriță (mască de formă) -->
-        <div id="shape-mold" class="shape shape--circle" data-shape="circle" aria-hidden="true">
-          <!-- baza aluatului (contur) -->
-          <div id="shape-base" class="shape-base"></div>
-          <!-- umplerea pentru turnare (se animă înălțimea) -->
-          <div id="shape-fill" class="shape-fill" style="height:0%"></div>
-        </div>
-        <!-- zona de drop pentru toppinguri -->
-        <div id="dropzone" class="build-dropzone" aria-label="Plasare toppinguri"></div>
-      </div>
+      <!-- Canvas (game.js inserează forma și dropzone-ul dacă lipsesc) -->
+      <div class="build-stage" aria-live="polite" aria-label="Zonă de lucru prăjitură"></div>
 
-      <!-- UNELTE PE ETAPE -->
-      <!-- P O U R -->
-      <div id="tools-pour" class="tools tools--phase" data-phase="pour">
-        <div class="row tight">
-          <div class="small muted">Ține apăsat sau trage slider-ul până umpli forma.</div>
-          <div class="row">
-            <button id="btn-pour-hold" class="btn">🫗 Ține pentru turnare</button>
-            <input id="pour-range" type="range" min="0" max="100" value="0" aria-label="Progres turnare">
-          </div>
-        </div>
-        <div class="row tight small">
-          <div>Progres: <b><span id="pour-pct">0</span>%</b></div>
-          <div>Scor turnare: <b id="score-pour">0</b>/100</div>
-        </div>
-      </div>
-
-      <!-- D E C O R -->
-      <div id="tools-decorate" class="tools tools--phase hidden" data-phase="decorate">
-        <div class="row tight">
-          <div><b>Plasate:</b> <span id="placed-count">0</span></div>
-          <div class="small muted">Trage și plasează pe prăjitură.</div>
-        </div>
-        <div id="palette" class="palette" aria-label="Paletă toppinguri">
-          <!-- populată din game.js (butoane cu .chip-btn) -->
-        </div>
-        <div class="row tight small" style="margin-top:.25rem">
-          <div>Scor decor: <b id="score-decor">0</b>/100</div>
-        </div>
-      </div>
-
-      <!-- CONTROALE GENERALE CANVAS -->
-      <div class="row tight canvas-controls">
-        <div>
-          Mărime prăjitură:
-          <input id="size-range" type="range" min="1" max="3" step="1" value="2" aria-label="Mărime (S/M/L)">
-          <span id="size-label" class="small muted">M</span>
-        </div>
-        <div>
-          Formă:
-          <select id="shape-select" aria-label="Formă matriță">
+      <!-- Controale canvas (dacă există, game.js le folosește; dacă nu, le creează el) -->
+      <div class="canvas-controls">
+        <div class="row">
+          <label for="shape-select">Formă:</label>
+          <select id="shape-select">
             <option value="circle">Cerc</option>
             <option value="heart">Inimă</option>
             <option value="star">Stea</option>
           </select>
+          <span class="sep">•</span>
+          Dimensiune:
+          <input id="size-range" type="range" min="1" max="3" step="1" value="2" aria-label="Dimensiune aluat (S/M/L)">
+        </div>
+        <div class="row">
+          <button id="btn-pour-hold" class="btn">🫗 Ține pentru turnare</button>
+          <input id="pour-range" type="range" min="0" max="100" step="1" value="0" aria-label="Procent umplere">
+          <b id="pour-pct">0%</b>
         </div>
       </div>
+
+      <!-- Paleta de toppinguri (populată din game.js) -->
+      <div class="row tight" style="margin-top:.25rem">
+        <div><b>Plasate:</b> <span id="build-count">0</span></div>
+      </div>
+      <div id="build-palette" class="palette" aria-label="Paletă toppinguri"></div>
     </section>
 
-    <!-- Col dreapta: Bake & Serve -->
+    <!-- Dreapta: Bake & Serve -->
     <section class="game-panel" aria-labelledby="h-bake-serve">
       <h3 id="h-bake-serve">Bake & Serve</h3>
 
-      <!-- B A K E -->
-      <div id="panel-bake" class="bake-panel tools--phase hidden" data-phase="bake" aria-live="polite">
+      <!-- Bake -->
+      <div class="bake-panel tools--phase" data-phase="bake" aria-live="polite">
         <div class="oven">
           <img id="oven-img" src="images/oven_open.png" alt="Cuptor">
           <div class="progress-container" aria-label="Progres coacere">
@@ -161,24 +139,21 @@
             <span></span>
           </div>
           <div class="row" style="margin-top:6px">
-            <button id="btn-bake-start" class="btn">🔥 Pornește coacerea</button>
-            <button id="btn-bake-stop" class="btn secondary" title="Oprește coacerea (Space)">🛑 Oprește</button>
+            <button id="btn-bake" class="btn">🔥 Pornește coacerea</button>
+            <button id="btn-stop" class="btn secondary" title="Oprește coacerea (Space)" disabled>🛑 Oprește</button>
           </div>
-        </div>
-
-        <div class="row tight small" style="margin-top:.35rem">
-          <div>Scor coacere: <b id="score-bake">0</b>/100</div>
-          <div>Fereastră: <b id="bake-window-label">-</b></div>
         </div>
       </div>
 
-      <!-- S E R V E -->
-      <div id="panel-serve" class="serve-panel tools--phase hidden" data-phase="serve">
+      <hr>
+
+      <!-- Serve -->
+      <div class="serve-panel tools--phase" data-phase="serve">
         <div class="panel soft">
-          <div>Calitate totală: <b id="score-q">0.00</b></div>
-          <div>Cantitate: <b id="score-qty">0</b> buc</div>
+          <div>Calitate totală: <b id="score-q-serve">0.00</b></div>
+          <div>Cantitate: <b id="score-qty-serve">0</b> buc</div>
         </div>
-        <button id="btn-serve" class="btn wide" title="Consumă ingrediente conform rețetei și adaugă în stoc">✅ Servește clientul</button>
+        <button id="btn-serve" class="btn wide" title="Consumă ingrediente conform rețetei și adaugă în stoc" disabled>✅ Servește clientul</button>
         <div class="small muted" style="margin-top:.25rem">
           După servire, începe automat o comandă nouă.
         </div>
