@@ -1,19 +1,13 @@
 /* assets/styles/game.css */
 /* =====================================================
    FinKids Tycoon — Stiluri pentru jocul manual (kid-friendly)
-   - Stepper etape
-   - Canvas 100% HTML/CSS (forme: cerc, inimă, stea)
-   - Turnare cu umplere animată
-   - Decor (chips) drag & drop
-   - Coacere (bară progres + fereastră „hit”)
-   - Toasts, particule, animații jucăușe
    ===================================================== */
 
 /* ---------- Stepper (etape) ---------- */
 #stepper{
   position:sticky; top:56px; z-index:900;
   background:linear-gradient(180deg, rgba(253,210,110,.95), rgba(253,210,110,.6));
-  border-bottom:2px solid var(--frame);
+  border-bottom:2px solid #c8a662;
 }
 #stepper ol{
   list-style:none; margin:0; padding:.35rem .75rem;
@@ -21,7 +15,7 @@
 }
 #stepper li{
   background:#fffef7;
-  border:2px solid var(--frame);
+  border:2px solid #c8a662;
   border-radius:999px;
   padding:.28rem .7rem;
   font-weight:700;
@@ -29,20 +23,14 @@
   display:flex; align-items:center; gap:.35rem;
   opacity:.85; transform:translateZ(0);
 }
-#stepper li::before{
-  content:"•";
-  display:inline-block; width:1ch; text-align:center;
-  filter:drop-shadow(0 1px 0 rgba(0,0,0,.05));
-}
 #stepper li.active{
-  background:var(--brand-2);
+  background:#ffd86f;
   outline:2px solid #000;
   opacity:1;
 }
 #stepper li.done{
   background:#dff6df; border-color:#9ed39e;
 }
-#stepper li.done::before{ content:"✓"; }
 
 /* ---------- Layout general joc ---------- */
 .game-layout{
@@ -52,20 +40,16 @@
   padding:12px;
   min-height:calc(100vh - 56px - 40px);
 }
-
-/* Panouri */
 .game-panel{
   background:#fffef7;
-  border:2px solid var(--frame);
+  border:2px solid #e1d4b0;
   border-radius:12px;
   padding:12px;
   box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
-
-/* Card comandă */
 .order-card{
   background:#fffbee;
-  border:1px dashed var(--frame);
+  border:1px dashed #e1d4b0;
   border-radius:10px;
   padding:8px;
 }
@@ -76,7 +60,7 @@
   position:relative;
   height:320px;
   background:#fff;
-  border:2px dashed var(--border-2);
+  border:2px dashed #e6dfca;
   border-radius:14px;
   display:flex;
   align-items:center;
@@ -84,32 +68,21 @@
   overflow:hidden;
   isolation:isolate;
 }
-
-/* container formă (mască) */
 .shape{
-  --mold-size: 200px;          /* va fi ajustată din JS după slider (S/M/L) */
+  --mold-size: 200px;
   position:relative;
   width:var(--mold-size);
   height:var(--mold-size);
   filter:drop-shadow(0 2px 6px rgba(0,0,0,.15));
   transition: transform .15s ease;
 }
-
-/* Variante de formă (se aplică pe containerul .shape) */
-.shape--circle{
-  border-radius:999px;
-  clip-path:circle(50% at 50% 50%);
-}
+.shape--circle{ border-radius:999px; clip-path:circle(50% at 50% 50%); }
 .shape--heart{
-  /* inimă aproximată cu clip-path poligonal pentru compat */
   clip-path:polygon(50% 85%, 20% 60%, 12% 40%, 20% 25%, 35% 20%, 50% 30%, 65% 20%, 80% 25%, 88% 40%, 80% 60%);
 }
 .shape--star{
-  /* stea cu 10 colțuri */
   clip-path:polygon(50% 5%, 61% 38%, 95% 38%, 67% 57%, 78% 90%, 50% 70%, 22% 90%, 33% 57%, 5% 38%, 39% 38%);
 }
-
-/* Bază și umplere */
 .shape-base{
   position:absolute; inset:0;
   background:radial-gradient(100% 100% at 50% 40%, #ffe7b3 0%, #ffd37a 55%, #f7b74d 100%);
@@ -119,32 +92,28 @@
 .shape-fill{
   position:absolute; left:0; bottom:0; width:100%;
   height:0%;
-  background:
-    repeating-linear-gradient(180deg, #f7c66a 0 6px, #f2b85a 6px 12px);
+  background:repeating-linear-gradient(180deg, #f7c66a 0 6px, #f2b85a 6px 12px);
   border-top:1px solid rgba(0,0,0,.08);
   transition:height .15s ease;
 }
+.shape-fill.good{ box-shadow:0 0 0 2px #6ad16f inset, 0 0 12px rgba(106,209,111,.5) inset }
 
 /* Dropzone pentru toppinguri */
-.build-dropzone{
-  position:absolute; inset:0;
-  pointer-events:auto;
-}
+.build-dropzone{ position:absolute; inset:0; pointer-events:auto; }
 
 /* ---------- Unelte pe etape ---------- */
 .tools--phase{ margin-top:10px; }
 .hidden{ display:none !important; }
 
-/* Controale canvas (mărime + formă) */
 .canvas-controls{
   margin-top:10px;
   background:#fffbee;
-  border:1px dashed var(--frame);
+  border:1px dashed #e1d4b0;
   border-radius:10px;
   padding:8px;
 }
 
-/* ---------- Paletă & chips (toppinguri) ---------- */
+/* ---------- Paletă & chips ---------- */
 .palette{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -156,7 +125,7 @@
   align-items:center;
   gap:6px;
   padding:.35rem .45rem;
-  border:1px solid var(--border-2);
+  border:1px solid #e6dfca;
   border-radius:10px;
   background:#fffef7;
   cursor:grab;
@@ -168,7 +137,6 @@
   display:inline-block; width:22px; height:22px; border-radius:50%;
   box-shadow:inset 0 0 0 2px rgba(0,0,0,.1);
 }
-/* Culori „gust” (vor fi atribuite în JS via data-type) */
 i[data-type="chocolate_chips"]{ background:radial-gradient(circle at 60% 40%, #6a3b1e, #4b2813); }
 i[data-type="strawberries"]{ background:radial-gradient(circle at 60% 40%, #ff6b6b, #d23b3b); }
 i[data-type="coconut"]{ background:linear-gradient(45deg, #fff, #f3f3f3); }
@@ -185,7 +153,6 @@ i[data-type="sprinkles"]{
 i[data-type="cacao"]{ background:linear-gradient(45deg, #5a341c, #3b220f); }
 i[data-type="sugar"]{ background:repeating-linear-gradient(45deg, #fff, #fff 4px, #f2f2f2 4px, #f2f2f2 8px); }
 
-/* Chips plasate pe canvas */
 .chip{
   position:absolute;
   width:30px; height:30px; border-radius:50%;
@@ -200,22 +167,19 @@ i[data-type="sugar"]{ background:repeating-linear-gradient(45deg, #fff, #fff 4px
 #pour-range{ width:200px }
 #pour-pct{ font-variant-numeric:tabular-nums }
 
-/* Mică dungă țintă pe umplere (apare când e „bine turnat”) */
-.shape-fill.good{ box-shadow:0 0 0 2px #6ad16f inset, 0 0 12px rgba(106,209,111,.5) inset }
-
 /* ---------- Coacere ---------- */
 .oven img{width:100%; max-width:320px; display:block; margin:0 auto}
 .progress-container{
   width:90%; height:20px;
-  background:var(--paper);
-  border:2px solid var(--frame);
+  background:#fcfaf2;
+  border:2px solid #c8a662;
   border-radius:10px;
   margin:8px auto
 }
 .progress-bar{
   height:100%;
   width:0;
-  background:var(--brand);
+  background:#ffd86f;
   border-radius:10px;
   transition:width .08s;
   position:relative; overflow:hidden
@@ -229,28 +193,19 @@ i[data-type="sugar"]{ background:repeating-linear-gradient(45deg, #fff, #fff 4px
 }
 @keyframes barPulse{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 
-/* Fereastra „hit” pentru coacere */
 .hit-window{
-  width:90%;
-  height:16px;
+  width:90%; height:16px;
   border:1px dashed #999;
   margin:0 auto;
   border-radius:10px;
   position:relative
 }
 .hit-window span{
-  position:absolute;
-  left:55%;
-  width:10%;
-  height:100%;
-  background:#88d18a;
-  opacity:.45;
-  border-radius:10px
+  position:absolute; left:55%; width:10%; height:100%;
+  background:#88d18a; opacity:.45; border-radius:10px
 }
-.hit-window span.pulse{animation:winPulse 1.2s ease-in-out infinite}
-@keyframes winPulse{0%,100%{opacity:.35}50%{opacity:.6}}
 
-/* Scuturare cuptor când se ratează fereastra */
+/* Cuptor shake când se ratează fereastra */
 #oven-img.shake{animation:shake .35s ease-in-out}
 @keyframes shake{
   0%,100%{transform:translateX(0)}
@@ -277,21 +232,13 @@ i[data-type="sugar"]{ background:repeating-linear-gradient(45deg, #fff, #fff 4px
 }
 .toast-container{position:fixed;top:12px;right:12px;z-index:100000;display:flex;flex-direction:column;gap:8px}
 .toast{
-  background:#222;
-  color:#fff;
-  padding:8px 12px;
+  background:#222; color:#fff; padding:8px 12px;
   border-radius:10px;
   box-shadow:0 2px 8px rgba(0,0,0,.3);
   opacity:.95
 }
 
-/* ---------- Utilitare animații jucăușe ---------- */
-.wobble{ animation:wobble .8s ease both }
-@keyframes wobble{
-  0%{transform:rotate(0)} 25%{transform:rotate(2deg)}
-  50%{transform:rotate(-2deg)} 75%{transform:rotate(1deg)}
-  100%{transform:rotate(0)}
-}
+/* ---------- Utilitare animații ---------- */
 .bounce{ animation:bounce .6s ease both }
 @keyframes bounce{
   0%,100%{transform:translateY(0)}
