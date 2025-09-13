@@ -147,6 +147,28 @@ function ovenPuff(success) {
   const r = img.getBoundingClientRect();
   confettiAt(r.left + r.width * 0.5, r.top + r.height * 0.15, success ? 16 : 8);
 }
+function ensureCanvas() {
+  const stage = document.querySelector('.build-stage');
+  if (!stage) return;
+
+  if (!$('#shape-mold')) {
+    const mold = document.createElement('div');
+    mold.id = 'shape-mold';
+    mold.className = 'shape shape--circle';
+    mold.innerHTML = `
+      <div id="shape-base" class="shape-base"></div>
+      <div id="shape-fill" class="shape-fill" style="height:0%"></div>
+    `;
+    stage.appendChild(mold);
+  }
+  if (!$('#dropzone')) {
+    const dz = document.createElement('div');
+    dz.id = 'dropzone';
+    dz.className = 'build-dropzone';
+    dz.setAttribute('aria-label','Plasare toppinguri');
+    stage.appendChild(dz);
+  }
+}
 
 // ---------- UI helpers ----------
 function setPhase(next) {
@@ -172,9 +194,14 @@ function setPhase(next) {
   const canBakeStop  = next === 'bake' && state.baking.running;
   const canServe     = next === 'serve';
 
-  $('#btn-bake-start')?.toggleAttribute('disabled', !canBakeStart);
-  $('#btn-bake-stop') ?.toggleAttribute('disabled', !canBakeStop);
-  $('#btn-serve')     ?.toggleAttribute('disabled', !canServe);
+ const btnStart = $('#btn-bake-start') || $('#btn-bake');
+const btnStop  = $('#btn-bake-stop')  || $('#btn-stop');
+const btnServe = $('#btn-serve');
+
+btnStart?.toggleAttribute('disabled', !(next === 'bake' && !state.baking.locked && !state.baking.running));
+btnStop ?.toggleAttribute('disabled', !(next === 'bake' && state.baking.running));
+btnServe?.toggleAttribute('disabled', !(next === 'serve'));
+
 }
 
 function updateMold() {
@@ -219,7 +246,8 @@ function updateHitWindowUI() {
 }
 
 function buildPalette() {
-  const wrap = $('#palette'); if (!wrap) return;
+  const wrap = $('#build-palette') || $('#palette'); // <— suportă ambele ID-uri
+  if (!wrap) return;
   wrap.innerHTML = '';
   ING.forEach(ing => {
     const b = document.createElement('button');
@@ -230,6 +258,7 @@ function buildPalette() {
     wrap.appendChild(b);
   });
 }
+
 
 function styleChip(el, type) {
   const paint = {
@@ -300,9 +329,11 @@ function readPlacedFromDOM() {
 
 function savePlaced() {
   state.placed = readPlacedFromDOM();
-  $('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));
-  calcTopScore();
+  $('#build-count')  && ($('#build-count').textContent  = String(state.placed.length));
+$('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));  calcTopScore();
   renderScores();
+
+
 }
 
 function calcTopScore() {
@@ -449,6 +480,13 @@ function renderScores() {
   $('#score-bake')  && ($('#score-bake').textContent  = String(state.scores.bake));
   $('#score-q')     && ($('#score-q').textContent     = (state.scores.q || 0).toFixed(2));
   $('#score-qty')   && ($('#score-qty').textContent   = String(state.scores.qty || 0));
+  // alias pentru decor:
+$('#score-top') && ($('#score-top').textContent = String(state.scores.top));
+
+// serve panel:
+$('#score-q-serve')   && ($('#score-q-serve').textContent   = (state.scores.q || 0).toFixed(2));
+$('#score-qty-serve') && ($('#score-qty-serve').textContent = String(state.scores.qty || 0));
+
 }
 
 // ---------- Serve ----------
@@ -623,11 +661,20 @@ function renderBuildFromState() {
 
     zone.appendChild(chip);
   });
-  $('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));
+  
+  $('#build-count')  && ($('#build-count').textContent  = String(state.placed.length));
+$('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));
+
 }
 
 // ---------- Evenimente ----------
 function wireEvents() {
+  const btnStart = $('#btn-bake-start') || $('#btn-bake');
+const btnStop  = $('#btn-bake-stop')  || $('#btn-stop');
+
+btnStart?.addEventListener('click', startBake);
+btnStop ?.addEventListener('click', stopBake);
+
   // Step nav
   $('#btn-prev')?.addEventListener('click', () => {
     const idx = Math.max(0, PHASES.indexOf(state.phase) - 1);
@@ -706,6 +753,8 @@ function wireEvents() {
 // ---------- Init ----------
 function mount() {
   wireEvents();
+    ensureCanvas(); // <— ADĂUGAT
+
   // Dimensiune inițială (afișează eticheta)
   const map = { 1: 'S', 2: 'M', 3: 'L' };
   const slider = $('#size-range');
