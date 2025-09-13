@@ -257,6 +257,10 @@ fk_boot();
       <span class="sep">•</span>
       ⚡ Boost: <b id="g-boost">0%</b>
     </div>
+      <div class="right">
+      <button id="btn-prev" class="btn secondary">⟵ Înapoi</button>
+      <button id="btn-next" class="btn">Înainte ⟶</button>
+    </div>
   </header>
 
   <!-- Stepper -->
