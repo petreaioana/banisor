@@ -72,16 +72,16 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
   <link rel="preload" as="image" href="images/shop_background.png" />
 
   <!-- Stiluri -->
-  <link rel="stylesheet" href="assets/styles/base.css" />
-  <link rel="stylesheet" href="assets/styles/dashboard.css" />
+  <link rel="stylesheet" href="dashboard_assets/styles/base.css" />
+  <link rel="stylesheet" href="dashboard_assets/styles/dashboard.css" />
 
   <!-- Seed server (opțional; va fi folosit de FK în state.js) -->
   <script>
     window.__SERVER_STATE__ = <?php echo json_encode($serverState, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);?>;
   </script>
 
-  <!-- Motor autosim (importă FK din assets/js/shared/state.js) -->
-  <script type="module" src="assets/js/dashboard/engine.js" defer></script>
+  <!-- Motor autosim (importă FK din dashboard_assets/js/shared/state.js) -->
+  <script type="module" src="dashboard_assets/js/dashboard/engine.js" defer></script>
 
   <noscript><style>main, .layout { display:none; }</style></noscript>
 </head>

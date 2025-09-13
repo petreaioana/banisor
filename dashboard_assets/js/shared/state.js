@@ -1,6 +1,6 @@
-/* ========== UnificareExport | assets\js\shared\state.js ========== */
+/* ========== UnificareExport | dashboard_assets\js\shared\state.js ========== */
 
-// assets/js/shared/state.js
+// dashboard_assets/js/shared/state.js
 // =====================================================
 // FinKids Tycoon — Nucleu de stare & API (FK v5+)
 // - World clock (year/season/day/minute)

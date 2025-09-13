@@ -1,6 +1,6 @@
-/* ========== UnificareExport | assets\js\dashboard\engine.js ========== */
+/* ========== UnificareExport | dashboard_assets\js\dashboard\engine.js ========== */
 
-// assets/js/dashboard/engine.js
+// dashboard_assets/js/dashboard/engine.js
 // =====================================================
 // FinKids Tycoon — Dashboard autosim engine (complet)
 // - Integrare FK v5 (world/seasons/weather/events/quests/staff/R&D/save-slots)

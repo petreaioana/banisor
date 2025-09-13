@@ -210,6 +210,36 @@ fk_boot();
     footer.game-footer{display:flex;justify-content:space-between;align-items:center;padding:.6rem 1rem}
     @media (max-width:1100px){.game-layout{grid-template-columns:300px 1fr}.game-panel:last-child{order:3}.build-stage{height:300px}.palette{grid-template-columns:repeat(3,1fr)}}
     @media (max-width:860px){.game-layout{grid-template-columns:1fr}.build-stage{height:280px}}
+  /* --- CHIP (topping ca imagine) --- */
+.chip{
+  position:absolute;
+  width:44px;               /* a fost 30px — un pic mai mare arată mai bine */
+  height:44px;
+  border-radius:8px;        /* puțin rotunjit; imaginile au transparență */
+  cursor:move;
+  user-select:none;
+  touch-action:none;
+  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.6) inset;
+  animation:chipPop .18s ease-out both;
+}
+.chip img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  pointer-events:none;      /* permite drag pe containerul .chip */
+}
+
+/* --- PALETĂ (iconițe din imagini, nu <i> cu background) --- */
+.chip-btn{
+  display:flex; align-items:center; gap:6px;
+  padding:.35rem .45rem; border:1px solid var(--border-2);
+  border-radius:10px; background:#fffef7; cursor:grab; user-select:none;
+}
+.chip-btn img{
+  width:22px; height:22px; object-fit:contain; display:inline-block;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.05));
+}
+
   </style>
 </head>
 <body>
@@ -410,6 +440,16 @@ fk_boot();
     { id:'cacao',           name:'Cacao' },
     { id:'sugar',           name:'Zahăr' },
   ];
+  // Harta ID → fișier PNG din /images (numele din lista ta de fișiere)
+const TOP_IMG = {
+  chocolate_chips: 'chocolate_chips.png',
+  strawberries:    'strawberries.png',
+  coconut:         'coconut.png',
+  sprinkles:       'sprinkles.png',
+  cacao:           'cacao.png',
+  sugar:           'sugar.png',
+};
+
   const PHASES = ['pour','decorate','bake','serve'];
 
   // ---------- Game state ----------
@@ -535,50 +575,59 @@ fk_boot();
     $('#bake-window-label') && ($('#bake-window-label').textContent = `${Math.round(a*100)}–${Math.round(b*100)}%`);
   }
 
-  function buildPalette(){
-    const wrap=$('#palette'); if(!wrap) return;
-    wrap.innerHTML='';
-    ING.forEach(ing=>{
-      const b=document.createElement('button');
-      b.type='button'; b.className='chip-btn';
-      b.innerHTML=`<i data-type="${ing.id}"></i><span>${ing.name}</span>`;
-      b.addEventListener('click', ()=> spawnChip(ing.id));
-      wrap.appendChild(b);
-    });
-  }
+ function buildPalette(){
+  const wrap=$('#palette'); if(!wrap) return;
+  wrap.innerHTML='';
+  ING.forEach(ing=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='chip-btn';
+    const imgSrc = 'images/' + (TOP_IMG[ing.id] || 'sprinkles.png');
+    b.innerHTML = `<img src="${imgSrc}" alt="${ing.name}"><span>${ing.name}</span>`;
+    b.addEventListener('click', ()=> spawnChip(ing.id));
+    wrap.appendChild(b);
+  });
+}
 
-  function styleChip(el, type){
-    const paint={
-      chocolate_chips:'radial-gradient(circle at 60% 40%, #6a3b1e, #4b2813)',
-      strawberries   :'radial-gradient(circle at 60% 40%, #ff6b6b, #d23b3b)',
-      coconut        :'linear-gradient(45deg, #fff, #f3f3f3)',
-      sprinkles      :'repeating-linear-gradient(45deg, #ffeea8, #ffeea8 6px, #ffd77a 6px, #ffd77a 12px)',
-      cacao          :'linear-gradient(45deg, #5a341c, #3b220f)',
-      sugar          :'repeating-linear-gradient(45deg, #fff, #fff 4px, #f2f2f2 4px, #f2f2f2 8px)',
-    };
-    el.style.background = paint[type] || '#eee';
-  }
 
-  function spawnChip(id){
-    const zone=$('#dropzone'); if(!zone) return;
-    const chip=document.createElement('div');
-    chip.className='chip'; chip.dataset.type=id;
-    styleChip(chip, id);
-    chip.style.left=(25+Math.random()*50)+'%';
-    chip.style.top =(25+Math.random()*50)+'%';
+function spawnChip(id){
+  const zone=$('#dropzone'); if(!zone) return;
 
-    let dragging=false, pid=0, sx=0, sy=0, ox=0, oy=0;
-    const start=(e)=>{ dragging=true; pid=e.pointerId||0; chip.setPointerCapture && chip.setPointerCapture(pid); sx=e.clientX; sy=e.clientY; const r=chip.getBoundingClientRect(); ox=r.left; oy=r.top; chip.style.cursor='grabbing'; };
-    const move =(e)=>{ if(!dragging) return; const dx=e.clientX-sx, dy=e.clientY-sy; const parent=zone.getBoundingClientRect(); const nx=((ox+dx)-parent.left)/parent.width*100; const ny=((oy+dy)-parent.top)/parent.height*100; chip.style.left=clamp(nx,5,95)+'%'; chip.style.top=clamp(ny,5,95)+'%'; };
-    const end  =()=>{ dragging=false; chip.style.cursor='move'; try{ chip.releasePointerCapture && chip.releasePointerCapture(pid); }catch(_){ } sprinkleAt(zone, chip); playPlop(); savePlaced(); };
+  const chip=document.createElement('div');
+  chip.className='chip'; chip.dataset.type=id;
+  chip.style.left=(25+Math.random()*50)+'%';
+  chip.style.top =(25+Math.random()*50)+'%';
 
-    chip.addEventListener('pointerdown', start, {passive:true});
-    chip.addEventListener('pointermove',  move);
-    chip.addEventListener('pointerup',    end,  {passive:true});
+  // imaginea efectivă a toppingului
+  const img=document.createElement('img');
+  img.src = 'images/' + (TOP_IMG[id] || 'sprinkles.png');
+  img.alt = (ING.find(i=>i.id===id)?.name) || id;
+  chip.appendChild(img);
 
-    zone.appendChild(chip);
-    savePlaced();
-  }
+  // drag & drop pe containerul .chip
+  let dragging=false, pid=0, sx=0, sy=0, ox=0, oy=0;
+  const start=(e)=>{ dragging=true; pid=e.pointerId||0; chip.setPointerCapture && chip.setPointerCapture(pid);
+    sx=e.clientX; sy=e.clientY; const r=chip.getBoundingClientRect(); ox=r.left; oy=r.top; chip.style.cursor='grabbing'; };
+  const move =(e)=>{ if(!dragging) return;
+    const dx=e.clientX-sx, dy=e.clientY-sy;
+    const parent=zone.getBoundingClientRect();
+    const nx=((ox+dx)-parent.left)/parent.width*100;
+    const ny=((oy+dy)-parent.top)/parent.height*100;
+    chip.style.left=clamp(nx,5,95)+'%';
+    chip.style.top =clamp(ny,5,95)+'%';
+  };
+  const end  =()=>{ dragging=false; chip.style.cursor='move';
+    try{ chip.releasePointerCapture && chip.releasePointerCapture(pid); }catch(_){}
+    sprinkleAt(zone, chip); playPlop(); savePlaced();
+  };
+
+  chip.addEventListener('pointerdown', start, {passive:true});
+  chip.addEventListener('pointermove',  move);
+  chip.addEventListener('pointerup',    end,  {passive:true});
+
+  zone.appendChild(chip);
+  savePlaced();
+}
+
 
   function readPlacedFromDOM(){
     return $$('#dropzone .chip').map(el=>({
