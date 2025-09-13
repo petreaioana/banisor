@@ -1,3 +1,5 @@
+/* ========== UnificareExport | assets\js\dashboard\engine.js ========== */
+
 // assets/js/dashboard/engine.js
 // =====================================================
 // FinKids Tycoon — Dashboard autosim engine (complet)

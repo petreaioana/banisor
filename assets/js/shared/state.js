@@ -1,3 +1,5 @@
+/* ========== UnificareExport | assets\js\shared\state.js ========== */
+
 // assets/js/shared/state.js
 // =====================================================
 // FinKids Tycoon — Nucleu de stare & API (FK v5+)
@@ -774,6 +776,7 @@ export const FK = (() => {
     getState() { return S; },
     setState(next) { S = Object.assign(S, next); save(); },
     saveState: save,
+    addBuff, tickBuffs,
 
     // Export/Import
     exportJSON, importJSON,
