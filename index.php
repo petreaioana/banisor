@@ -1,4 +1,3 @@
-/* ========== UnificareExport | index.php ========== */
 <?php
 // index.php — FinKids Tycoon: Dashboard (autosim)
 session_start();
