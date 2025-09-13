@@ -111,7 +111,7 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       <span class="sep">•</span>
       ⚡ Boost: <b id="top-boost">0%</b>
       <span class="sep">•</span>
-      <a class="btn" href="game.html">🎮 Joc manual</a>
+      <a class="btn" href="game.php">🎮 Joc manual</a>
     </div>
   </header>
 
@@ -223,7 +223,7 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
   <!-- Bara stații jos -->
   <footer id="stationbar" role="contentinfo">
     <div class="station active">Auto-Sim</div>
-    <a class="station" href="game.html">Joc Manual</a>
+    <a class="station" href="game.php">Joc Manual</a>
     <div class="station">Raport</div>
   </footer>
 

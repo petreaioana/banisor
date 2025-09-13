@@ -1,4 +1,4 @@
-<!-- game.html -->
+<!-- game.php -->
 <!DOCTYPE html>
 <html lang="ro">
 <head>
