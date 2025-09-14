@@ -38,9 +38,9 @@ aside{
 .scene{
   position:absolute;
   inset:0;
-  background:url('../../images/shop_background.png') center/cover no-repeat;
+  background:url('../images/shop_background.png') center/cover no-repeat;
 }
-.scene.scene-shop{ background-image:url('../../images/shop_background.png'); }
+.scene.scene-shop{ background-image:url('../images/shop_background.png'); }
 
 /* Bilet/ticker comandă/manager */
 .order-ticket{
