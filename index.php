@@ -95,11 +95,11 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       <button id="btn-pause" class="btn" type="button">⏸️ Pauză</button>
       <div class="speed" aria-label="Control viteză simulare">
         Viteză:
-        <button data-speed="0.5" class="btn speed-btn" type="button">0.5×</button>
-        <button data-speed="1"   class="btn speed-btn active" type="button">1×</button>
-        <button data-speed="2"   class="btn speed-btn" type="button">2×</button>
-        <button data-speed="5"   class="btn speed-btn" type="button">5×</button>
-        <button data-speed="20"  class="btn speed-btn" type="button">20×</button>
+        <button data-speed="0.5" class="btn speed-btn" type="button">0.5x</button>
+        <button data-speed="1"   class="btn speed-btn active" type="button">1x</button>
+        <button data-speed="2"   class="btn speed-btn" type="button">2x</button>
+        <button data-speed="5"   class="btn speed-btn" type="button">5x</button>
+        <button data-speed="20"  class="btn speed-btn" type="button">20x</button>
       </div>
     </div>
     <div class="right" aria-live="polite">
@@ -111,6 +111,8 @@ if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
       <span class="sep">•</span>
       ⚡ Boost: <b id="top-boost">0%</b>
       <span class="sep">•</span>
+      <button id="btn-import-manual" class="btn">📥 Import Joc manual</button>
+
       <a class="btn" href="game.php">🎮 Joc manual</a>
     </div>
   </header>

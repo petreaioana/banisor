@@ -56,6 +56,52 @@ const mProf = $('#m-prof');
 
 const ticker    = $('#ticker');
 const banCorner = $('#banisor-corner');
+async function importFromManual(clearAfter = true){
+  try{
+    const url = `game.php?action=export${clearAfter ? '&clear=1' : ''}`;
+    const r = await fetch(url, { cache: 'no-store' });
+    const j = await r.json();
+    if(!j || !j.ok){ alert('Import eșuat.'); return; }
+
+    const t = j.transfer || {};
+    const qty = Math.max(0, Number(t.qty||0));
+    const q   = Math.max(0.70, Math.min(0.99, Number(t.avg_q||0.86)));
+    const buffs = Array.isArray(t.buffs) ? t.buffs : [];
+
+    // unde importăm stocul? → în produsul activ din dashboard
+    const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
+
+    if(qty>0){
+      FK.addInventory(k, qty, q);
+    }
+
+    // traducem buff-urile din jocul manual în buffs FK (trafic / Q / (opțional) ușor wBonus)
+    buffs.forEach(b=>{
+      const minutes = Math.max(1, Math.ceil((Number(b.seconds_left||0))/60));
+      FK.addBuff({
+        id: `manual_${b.id||('b'+Date.now())}`,
+        label: b.label || 'Boost manual',
+        minutes,
+        trafficMult: Number(b.trafficMult||1),
+        qBonus: Number(b.qBonus||0),
+        // mic "prod. boost" prin a reduce timpul de așteptare (productivitate percepută)
+        // mapăm 30% din surplusul de trafic în -W (atenuare)
+        wBonus: -0.3 * Math.max(0, (Number(b.trafficMult||1)-1))
+      });
+    });
+
+    refreshTop();
+    setMetrics({ sold: (FK.getState().autosim?.aggregates?.sold||0),
+                 rev:  (FK.getState().autosim?.aggregates?.rev||0) });
+
+    const msg = `Importat ${qty} buc · Q ${q.toFixed(2)}${buffs.length?` · ${buffs.length} boost-uri`:''}`;
+    try{ const t = document.getElementById('ticker'); if(t) t.textContent = msg; }catch(_){}
+    alert(msg);
+  }catch(e){
+    console.error(e);
+    alert('Eroare rețea la import.');
+  }
+}
 
 // Parametri economie
 const ECON = {
@@ -190,22 +236,30 @@ function stepAuto(){
   S.timeMin += 1;
 
   // producție matinală (primele 120 min)
-  const earlyWindow = (S.timeMin - dayStart) < 120;
-  if(earlyWindow){
-    const planPerMin = Math.ceil((prod.plannedQty||0) / 120);
-    const ovenFactor = S.upgrades?.ovenPlus?1.5:1;
-    const ovenCapPerMin = Math.ceil(((S.capacity?.ovenBatchSize||50)*ovenFactor*(S.capacity?.ovenBatchesPerDay||2))/DAY_MINUTES);
-    const rid = (prod?.recipeId)||'croissant_plain';
-    const need = (S.recipes?.[rid]?.ingredients)||{};
-    const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([id,qty]) => Math.floor(((S.ingredients?.[id]?.qty)||0)/Math.max(1,qty)))) : planPerMin;
-    const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, maxByStoc||0));
-    if(made>0){
-      FK.consumeFor(rid, made);
-      const baseQ = 0.86 + (S.upgrades?.ovenPlus?0.02:0) + (S.upgrades?.timerAuto?0.02:0) + (S.boost?.qBonus||0);
-      const noise = (Math.random()*0.06)-0.03;
-      addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
-    }
+const earlyWindow = (S.timeMin - dayStart) < 120;
+if(earlyWindow){
+  const planPerMin = Math.ceil((prod.plannedQty||0) / 120);
+  const ovenFactor = S.upgrades?.ovenPlus?1.5:1;
+
+  const baseCapPerMin = ((S.capacity?.ovenBatchSize||50)*ovenFactor*(S.capacity?.ovenBatchesPerDay||2))/DAY_MINUTES;
+
+  // nou: o parte din boost se traduce în productivitate (max +30% pentru un boost mare)
+  const prodFactorFromBoost = 1 + Math.min(0.30, Math.max(0, (S.boost?.percent||0)/100 * 0.30));
+  const ovenCapPerMin = Math.ceil(baseCapPerMin * prodFactorFromBoost);
+
+  const rid = (prod?.recipeId)||'croissant_plain';
+  const need = (S.recipes?.[rid]?.ingredients)||{};
+  const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([id,qty]) => Math.floor(((S.ingredients?.[id]?.qty)||0)/Math.max(1,qty)))) : planPerMin;
+
+  const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, maxByStoc||0));
+  if(made>0){
+    FK.consumeFor(rid, made);
+    const baseQ = 0.86 + (S.upgrades?.ovenPlus?0.02:0) + (S.upgrades?.timerAuto?0.02:0) + (S.boost?.qBonus||0);
+    const noise = (Math.random()*0.06)-0.03;
+    addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
   }
+}
+
 
   // trafic minute + sosiri
   const Nday      = trafficN();
@@ -765,6 +819,7 @@ rngPrice.addEventListener('input', ()=> inpPrice.value=rngPrice.value);
 inpPrice.addEventListener('input', ()=> rngPrice.value=inpPrice.value);
 [ inpLot, inpHHs, inpHHe, inpHHd, chkFlyer, chkSocial, selCashiers, upOven, upPos, upAuto ].forEach(el=> el.addEventListener('change', ()=>{}));
 speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset.speed))));
+document.getElementById('btn-import-manual')?.addEventListener('click', ()=> importFromManual(true));
 
 // ---------- Start ----------
 setPaused(false);

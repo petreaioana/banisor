@@ -42,6 +42,41 @@ if ($action === 'reset') {
   unset($_SESSION['fk']);
   json_out([ 'ok' => true, 'msg' => 'reset done' ]);
 }
+// ... în routerul existent din game.php, sub 'reset'
+if ($action === 'export') {
+  fk_boot();
+  fk_buff_cleanup_and_recalc();
+  $fk = $_SESSION['fk'];
+
+  $now = time();
+  $buffs = [];
+  foreach ($fk['boost']['buffs'] as $b) {
+    $buffs[] = [
+      'id'          => $b['id'] ?? 'buff',
+      'label'       => $b['label'] ?? 'Boost',
+      'trafficMult' => isset($b['trafficMult']) ? floatval($b['trafficMult']) : 1.0,
+      'qBonus'      => isset($b['qBonus']) ? floatval($b['qBonus']) : 0.0,
+      'seconds_left'=> max(0, ($b['expires'] ?? $now) - $now),
+    ];
+  }
+
+  $transfer = [
+    'qty'   => intval($fk['stock']['units'] ?? 0),
+    'avg_q' => floatval($fk['stock']['avg_q'] ?? 0.86),
+    'buffs' => $buffs
+  ];
+
+  // dacă vrei import "o singură dată": ?action=export&clear=1
+  $shouldClear = isset($_GET['clear']) && intval($_GET['clear']) === 1;
+  if ($shouldClear) {
+    $_SESSION['fk']['stock']['units'] = 0;
+    // opțional: curăță și boost-urile pentru a nu le importa de 2 ori
+    $_SESSION['fk']['boost']['buffs'] = [];
+    $_SESSION['fk']['boost']['percent'] = 0;
+  }
+
+  json_out(['ok'=>true,'transfer'=>$transfer]);
+}
 
 // Unknown
 http_response_code(404);
