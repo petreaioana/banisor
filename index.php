@@ -1,11 +1,10 @@
 <?php
-// index.php — FinKids Tycoon: Dashboard (autosim)
+// index.php — FinKids Tycoon: Dashboard (autosim, cu seed JSON pe disc)
+declare(strict_types=1);
 session_start();
+require __DIR__ . '/lib/jsonfs.php';
 
-/**
- * Endpoint ușor pentru snapshot-uri (opțional).
- * Primește JSON { lei, day, progress, meta } și îl salvează în sesiune + cookie.
- */
+// 1) Endpoint snapshot din client (salvat pe disc în data/autosim/profile_autosave.json)
 if (isset($_GET['action']) && $_GET['action'] === 'save') {
   header('Content-Type: application/json; charset=utf-8');
   $raw = file_get_contents('php://input');
@@ -13,54 +12,46 @@ if (isset($_GET['action']) && $_GET['action'] === 'save') {
   if ($raw !== false && strlen($raw) < 200000) {
     $data = json_decode($raw, true);
     if (is_array($data)) {
-      $_SESSION['fk_profile'] = $data;
-      @setcookie(
-        'fk_profile',
-        json_encode($data, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
-        time()+31536000, // 1 an
-        '/',
-        '',
-        false, // secure (setează true dacă ai HTTPS)
-        true   // httponly
-      );
-      $ok = true;
+      // salvez direct pe disc
+      $payload = [
+        'lei'     => intval($data['lei'] ?? 0),
+        'day'     => intval($data['day'] ?? 1),
+        'progress'=> $data['progress'] ?? [],
+        'meta'    => [ 'when' => intval($data['meta']['when'] ?? (time()*1000)) ]
+      ];
+      $ok = jsonfs_write('autosim/profile_autosave.json', $payload);
     }
   }
   echo json_encode(['ok'=>$ok]);
   exit;
 }
 
-// Stare server inițială (poate fi folosită pentru seed/pornire joc pe client)
+// 2) Stare server implicită
 $serverState = [
   'lei' => 500,
   'day' => 1,
   'world' => [
     'year'   => 1,
-    'season' => 'primavara',  // primavara | vara | toamna | iarna
+    'season' => 'primavara',
     'day'    => 1,
-    'open'   => 8*60,         // 08:00
-    'close'  => 8*60 + 8*60   // 16:00 (match DAY_MINUTES=8h)
+    'open'   => 8*60,
+    'close'  => 8*60 + 8*60
   ],
-  'economy2' => [
-    'weather' => 'senin'      // senin | ploios | frig etc. (clientul poate suprascrie)
-  ],
-  'progress' => [
-    'cookies' => ['day'=>1, 'profitBest'=>0]
-  ],
-  'meta' => [
-    'introSeen' => false,
-    'when' => time()*1000
-  ]
+  'economy2' => [ 'weather' => 'senin' ],
+  'progress' => [ 'cookies' => ['day'=>1, 'profitBest'=>0] ],
+  'meta'     => [ 'introSeen' => false, 'when' => time()*1000 ]
 ];
 
-// Reconstruiește din sesiune / cookie (dacă există)
-if (!empty($_SESSION['fk_profile']) && is_array($_SESSION['fk_profile'])) {
-  $serverState = array_replace_recursive($serverState, $_SESSION['fk_profile']);
-} elseif (!empty($_COOKIE['fk_profile'])) {
-  $cookie = json_decode((string)$_COOKIE['fk_profile'], true);
-  if (is_array($cookie)) $serverState = array_replace_recursive($serverState, $cookie);
+// 3) Dacă există seed salvat pe disc, îl folosim (preferabil față de sesiune/cookie)
+$diskSeed = jsonfs_read('autosim/profile_autosave.json', null);
+if (is_array($diskSeed)) {
+  // doar câmpuri safe/folositoare pentru seed
+  if (isset($diskSeed['lei'])) $serverState['lei'] = intval($diskSeed['lei']);
+  if (isset($diskSeed['day'])) $serverState['day'] = intval($diskSeed['day']);
+  if (isset($diskSeed['meta']['when'])) $serverState['meta']['when'] = intval($diskSeed['meta']['when']);
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="ro">
 <head>
