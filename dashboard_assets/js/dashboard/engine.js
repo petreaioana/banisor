@@ -58,8 +58,12 @@ const ticker    = $('#ticker');
 const banCorner = $('#banisor-corner');
 async function importFromManual(clearAfter = true){
   try{
-    const url = `game.php?action=export${clearAfter ? '&clear=1' : ''}`;
+    // ❌ era: const url = `game.php?action=export${clearAfter ? '&clear=1' : ''}`;
+    // ✅ corect: cheamă routerul JSON din game_assets/api.php
+    const url = `game_assets/api.php?action=export${clearAfter ? '&clear=1' : ''}`;
+
     const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     if(!j || !j.ok){ alert('Import eșuat.'); return; }
 
@@ -68,14 +72,9 @@ async function importFromManual(clearAfter = true){
     const q   = Math.max(0.70, Math.min(0.99, Number(t.avg_q||0.86)));
     const buffs = Array.isArray(t.buffs) ? t.buffs : [];
 
-    // unde importăm stocul? → în produsul activ din dashboard
     const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
+    if(qty>0){ FK.addInventory(k, qty, q); }
 
-    if(qty>0){
-      FK.addInventory(k, qty, q);
-    }
-
-    // traducem buff-urile din jocul manual în buffs FK (trafic / Q / (opțional) ușor wBonus)
     buffs.forEach(b=>{
       const minutes = Math.max(1, Math.ceil((Number(b.seconds_left||0))/60));
       FK.addBuff({
@@ -84,15 +83,15 @@ async function importFromManual(clearAfter = true){
         minutes,
         trafficMult: Number(b.trafficMult||1),
         qBonus: Number(b.qBonus||0),
-        // mic "prod. boost" prin a reduce timpul de așteptare (productivitate percepută)
-        // mapăm 30% din surplusul de trafic în -W (atenuare)
         wBonus: -0.3 * Math.max(0, (Number(b.trafficMult||1)-1))
       });
     });
 
     refreshTop();
-    setMetrics({ sold: (FK.getState().autosim?.aggregates?.sold||0),
-                 rev:  (FK.getState().autosim?.aggregates?.rev||0) });
+    setMetrics({
+      sold: (FK.getState().autosim?.aggregates?.sold||0),
+      rev:  (FK.getState().autosim?.aggregates?.rev||0)
+    });
 
     const msg = `Importat ${qty} buc · Q ${q.toFixed(2)}${buffs.length?` · ${buffs.length} boost-uri`:''}`;
     try{ const t = document.getElementById('ticker'); if(t) t.textContent = msg; }catch(_){}
@@ -102,6 +101,7 @@ async function importFromManual(clearAfter = true){
     alert('Eroare rețea la import.');
   }
 }
+
 
 // Parametri economie
 const ECON = {
