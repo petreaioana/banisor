@@ -58,10 +58,8 @@ const ticker    = $('#ticker');
 const banCorner = $('#banisor-corner');
 async function importFromManual(clearAfter = true){
   try{
-    // ❌ era: const url = `game.php?action=export${clearAfter ? '&clear=1' : ''}`;
-    // ✅ corect: cheamă routerul JSON din game_assets/api.php
-    const url = `game_assets/api.php?action=export${clearAfter ? '&clear=1' : ''}`;
-
+    // Citește transferul din fișierul JSON (agregat de jocul manual)
+    const url = `game_assets/api.php?action=fetch_transfer${clearAfter ? '&clear=1' : ''}`;
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
@@ -94,7 +92,7 @@ async function importFromManual(clearAfter = true){
     });
 
     const msg = `Importat ${qty} buc · Q ${q.toFixed(2)}${buffs.length?` · ${buffs.length} boost-uri`:''}`;
-    try{ const t = document.getElementById('ticker'); if(t) t.textContent = msg; }catch(_){}
+    try{ const tEl = document.getElementById('ticker'); if(tEl) tEl.textContent = msg; }catch(_){}
     alert(msg);
   }catch(e){
     console.error(e);
