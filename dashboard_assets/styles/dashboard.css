@@ -55,12 +55,118 @@ aside{
   box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
 
-/* Banisor (sprite în colț) */
+/* Banisor mascot */
 .banisor-counter{
   position:absolute;
   bottom:1rem;
   left:1rem;
-  text-align:center;
+  width:140px;
+  height:160px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:.4rem;
+  pointer-events:none;
+  user-select:none;
+}
+.banisor-counter .ban-body{
+  position:relative;
+  width:120px;
+  height:120px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #fff4b3 0%, #ffe066 45%, #f5c242 100%);
+  box-shadow:0 8px 18px rgba(0,0,0,.15);
+  animation:ban-bob 3s ease-in-out infinite;
+}
+.banisor-counter .ban-eye{
+  position:absolute;
+  top:42%;
+  width:14px;
+  height:18px;
+  border-radius:50%;
+  background:#333;
+  box-shadow:0 4px 0 rgba(0,0,0,.1);
+}
+.banisor-counter .ban-eye-left{ left:34%; }
+.banisor-counter .ban-eye-right{ right:34%; }
+.banisor-counter .ban-mouth{
+  position:absolute;
+  bottom:30%;
+  left:50%;
+  width:42px;
+  height:24px;
+  margin-left:-21px;
+  border:4px solid #333;
+  border-top:none;
+  border-radius:0 0 40px 40px/0 0 28px 28px;
+  background:#ffedd5;
+}
+.banisor-counter .ban-cheek{
+  position:absolute;
+  top:58%;
+  width:24px;
+  height:14px;
+  border-radius:50%;
+  background:rgba(255,120,120,.35);
+  filter:blur(.4px);
+}
+.banisor-counter .ban-cheek-left{ left:16%; }
+.banisor-counter .ban-cheek-right{ right:16%; }
+.banisor-counter .ban-shadow{
+  width:90px;
+  height:14px;
+  border-radius:50%;
+  background:rgba(0,0,0,.18);
+  filter:blur(2px);
+  animation:ban-shadow 3s ease-in-out infinite;
+}
+@keyframes ban-bob{
+  0%,100%{ transform:translateY(0); }
+  50%{ transform:translateY(-6px); }
+}
+@keyframes ban-shadow{
+  0%,100%{ transform:scale(1); opacity:.5; }
+  50%{ transform:scale(.9); opacity:.35; }
+}
+
+/* Confetti overlay */
+.confetti-overlay{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  overflow:hidden;
+  opacity:0;
+  transition:opacity .2s ease-out;
+  z-index:99999;
+}
+.confetti-overlay.show{ opacity:1; }
+.confetti-overlay.hide{ opacity:0; transition:opacity .35s ease-in .1s; }
+.confetti-piece{
+  position:absolute;
+  width:10px;
+  height:16px;
+  border-radius:2px;
+  transform:translate3d(0,-120vh,0);
+  animation:confetti-fall var(--dur,1.3s) linear forwards;
+}
+.confetti-message{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font:700 1.8rem/1 'Segoe UI', Arial, sans-serif;
+  color:#2f2f2f;
+  text-shadow:0 2px 4px rgba(255,255,255,.8);
+  opacity:0;
+  animation:confetti-msg .8s ease forwards;
+}
+@keyframes confetti-fall{
+  to{ transform:translate3d(var(--dx,0px),110vh,0) rotate(540deg); opacity:0; }
+}
+@keyframes confetti-msg{
+  0%{ opacity:0; transform:translate(-50%,-40%); }
+  40%{ opacity:1; transform:translate(-50%,-50%); }
+  100%{ opacity:0; transform:translate(-50%,-60%); }
 }
 
 /* Controale stânga */

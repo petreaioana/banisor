@@ -56,50 +56,91 @@ const mProf = $('#m-prof');
 
 const ticker    = $('#ticker');
 const banCorner = $('#banisor-corner');
+
+const PRICE = { flour:2, milk:3, sugar:2, cacao:5, chocolate_chips:6, strawberries:5, coconut:4, sprinkles:3,
+  butter:5, eggs:3, yeast:3, vanilla:6, chocolate_glaze:7, cream:6, blueberries:6 };
+
+const CONFETTI_COLORS = ['#f9d423','#ff4e50','#1aafd0','#82d173','#f78da7'];
+function celebrate(message = 'Bravo!') {
+  const existing = document.querySelectorAll('.confetti-overlay');
+  if (existing.length > 2) { existing[0]?.remove(); }
+  const layer = document.createElement('div');
+  layer.className = 'confetti-overlay';
+  const count = 120;
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('span');
+    piece.className = 'confetti-piece';
+    piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    piece.style.left = Math.round(Math.random() * 100) + '%';
+    piece.style.setProperty('--dx', `${(Math.random() * 2 - 1) * 220}px`);
+    piece.style.setProperty('--dur', `${0.9 + Math.random() * 0.6}s`);
+    layer.appendChild(piece);
+  }
+  if (message) {
+    const msg = document.createElement('div');
+    msg.className = 'confetti-message';
+    msg.textContent = message;
+    layer.appendChild(msg);
+  }
+  document.body.appendChild(layer);
+  requestAnimationFrame(() => layer.classList.add('show'));
+  setTimeout(() => layer.classList.add('hide'), 900);
+  setTimeout(() => { try { layer.remove(); } catch (_) { } }, 1600);
+}
+function updateTicker(message) {
+  if (!ticker) return;
+  ticker.textContent = message;
+}
+
 async function importFromManual(clearAfter = true){
   try{
-    // Citește transferul din fișierul JSON (agregat de jocul manual)
     const url = `game_assets/api.php?action=fetch_transfer${clearAfter ? '&clear=1' : ''}`;
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    if(!j || !j.ok){ alert('Import eșuat.'); return; }
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    if(!payload || !payload.ok){ updateTicker('Import esuat'); return; }
 
-    const t = j.transfer || {};
-    const qty = Math.max(0, Number(t.qty||0));
-    const q   = Math.max(0.70, Math.min(0.99, Number(t.avg_q||0.86)));
-    const buffs = Array.isArray(t.buffs) ? t.buffs : [];
+    const transfer = payload.transfer || {};
+    const qty = Math.max(0, Number(transfer.qty || 0));
+    const q   = Math.max(0.70, Math.min(0.99, Number(transfer.avg_q || 0.86)));
+    const buffs = Array.isArray(transfer.buffs) ? transfer.buffs : [];
 
-    const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
-    if(qty>0){ FK.addInventory(k, qty, q); }
+    const key = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
+    if(qty > 0){ FK.addInventory(key, qty, q); }
 
-    buffs.forEach(b=>{
-      const minutes = Math.max(1, Math.ceil((Number(b.seconds_left||0))/60));
+    buffs.forEach(b => {
+      const minutes = Math.max(1, Math.ceil(Number(b.seconds_left || 0) / 60));
       FK.addBuff({
-        id: `manual_${b.id||('b'+Date.now())}`,
+        id: `manual_${b.id || ('b' + Date.now())}`,
         label: b.label || 'Boost manual',
         minutes,
-        trafficMult: Number(b.trafficMult||1),
-        qBonus: Number(b.qBonus||0),
-        wBonus: -0.3 * Math.max(0, (Number(b.trafficMult||1)-1))
+        trafficMult: Number(b.trafficMult || 1),
+        qBonus: Number(b.qBonus || 0),
+        wBonus: -0.3 * Math.max(0, (Number(b.trafficMult || 1) - 1))
       });
     });
 
-    refreshTop();
+    if (qty === 0 && buffs.length === 0) {
+      updateTicker('Nimic de importat');
+      return;
+    }
+
+    refreshTop();;
     setMetrics({
-      sold: (FK.getState().autosim?.aggregates?.sold||0),
-      rev:  (FK.getState().autosim?.aggregates?.rev||0)
+      sold: (FK.getState().autosim?.aggregates?.sold || 0),
+      rev:  (FK.getState().autosim?.aggregates?.rev  || 0)
     });
 
-    const msg = `Importat ${qty} buc · Q ${q.toFixed(2)}${buffs.length?` · ${buffs.length} boost-uri`:''}`;
-    try{ const tEl = document.getElementById('ticker'); if(tEl) tEl.textContent = msg; }catch(_){}
-    alert(msg);
-  }catch(e){
-    console.error(e);
-    alert('Eroare rețea la import.');
+    const note = `Importat ${qty} buc, Q ${q.toFixed(2)}${buffs.length ? ` + ${buffs.length} boosturi` : ''}`;
+    updateTicker(note);
+    if (qty > 0 || buffs.length){
+      celebrate('Import reusit!');
+    }
+  }catch(err){
+    console.error(err);
+    updateTicker('Import esuat');
   }
 }
-
 
 // Parametri economie
 const ECON = {
@@ -219,6 +260,63 @@ function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
   mProf.textContent = fmt(profit,0);
 }
 
+function defaultAggregates(){
+  return { sold:0, rev:0, cogs:0, holding:0, marketing:0, profit:0, N:0, C:0, W:0, Q:0, steps:0 };
+}
+
+function ensureAutoSupplies(force = false, productKey){
+  let state = FK.getState();
+  state.autosim = state.autosim || {};
+  const dayKey = `${state.world?.year || 1}-${state.world?.season || 'primavara'}-${state.world?.day || state.day || 1}`;
+  if (!force && state.autosim.lastRestock === dayKey) {
+    return;
+  }
+  const key = productKey || ((state.products && FK.getActiveProductKey) ? FK.getActiveProductKey() : (state.activeProduct || 'croissant'));
+  let product = state.products?.[key];
+  if (!product) return;
+  const recipeId = product.recipeId || 'croissant_plain';
+  let recipe = (state.recipes?.[recipeId]?.ingredients) || {};
+  if (Object.keys(recipe).length === 0) {
+    state.autosim.lastRestock = dayKey;
+    FK.setState({ autosim: state.autosim });
+    S = FK.getState();
+    return;
+  }
+  const planned = Math.max(1, product.plannedQty || 0);
+  const bufferUnits = Math.max(planned * 2, 80);
+  let purchased = 0;
+  let shortages = 0;
+  for (const [id, perUnit] of Object.entries(recipe)) {
+    state = FK.getState();
+    product = state.products?.[key];
+    recipe = (state.recipes?.[recipeId]?.ingredients) || {};
+    const needPerUnit = Math.max(1, Number(perUnit) || 1);
+    const target = Math.ceil(bufferUnits * needPerUnit);
+    const minLevel = Math.ceil(target * 0.6);
+    const have = Math.max(0, Math.round(state.ingredients?.[id]?.qty || 0));
+    if (have < minLevel) {
+      const buyQty = Math.min(target - have, target);
+      if (buyQty > 0) {
+        if (FK.buyIngredient(id, buyQty, PRICE)) {
+          purchased += buyQty;
+        } else {
+          shortages += 1;
+        }
+      }
+    }
+  }
+  state = FK.getState();
+  state.autosim = state.autosim || {};
+  state.autosim.lastRestock = dayKey;
+  FK.setState({ autosim: state.autosim });
+  S = FK.getState();
+  if (purchased > 0) {
+    updateTicker(`Auto restock complet (${purchased})`);
+  } else if (shortages > 0) {
+    updateTicker('Restock esuat din cauza fondurilor');
+  }
+}
+
 // ---------- Bucla minute ----------
 function toMinutes(hhmm){ const [h,m]=String(hhmm||'16:00').split(':').map(Number); return (h*60 + m); }
 
@@ -226,146 +324,199 @@ function stepAuto(){
   S = FK.getState();
   if(!S.autosim?.running) return;
 
-  const k    = activeKey();
-  const prod = S.products[k];
+  const productHint = S.activeProduct || undefined;
+  ensureAutoSupplies(false, productHint);
+  S = FK.getState();
+
+  const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || (S.activeProduct || 'croissant');
+  let prod = S.products?.[k];
+  if(!prod) return;
+
   const dayStart = S.world?.open || 8*60;
 
-  // timp
   S.timeMin += 1;
 
-  // producție matinală (primele 120 min)
-const earlyWindow = (S.timeMin - dayStart) < 120;
-if(earlyWindow){
-  const planPerMin = Math.ceil((prod.plannedQty||0) / 120);
-  const ovenFactor = S.upgrades?.ovenPlus?1.5:1;
+  const earlyWindow = (S.timeMin - dayStart) < 120;
+  if(earlyWindow){
+    const planPerMin = Math.max(0, Math.ceil((prod.plannedQty || 0) / 120));
+    const ovenFactor = S.upgrades?.ovenPlus ? 1.5 : 1;
+    const baseCapPerMin = ((S.capacity?.ovenBatchSize || 50) * ovenFactor * (S.capacity?.ovenBatchesPerDay || 2)) / DAY_MINUTES;
+    const prodFactorFromBoost = 1 + Math.min(0.30, Math.max(0, (S.boost?.percent || 0) / 100 * 0.30));
+    const ovenCapPerMin = Math.ceil(baseCapPerMin * prodFactorFromBoost);
+    const rid = prod?.recipeId || 'croissant_plain';
 
-  const baseCapPerMin = ((S.capacity?.ovenBatchSize||50)*ovenFactor*(S.capacity?.ovenBatchesPerDay||2))/DAY_MINUTES;
+    const computeCap = () => {
+      const recipe = (S.recipes?.[rid]?.ingredients) || {};
+      if (Object.keys(recipe).length === 0) return planPerMin;
+      return Math.min(...Object.entries(recipe).map(([id, qty]) => {
+        const have = Math.max(0, Math.round(S.ingredients?.[id]?.qty || 0));
+        return Math.floor(have / Math.max(1, qty));
+      }));
+    };
 
-  // nou: o parte din boost se traduce în productivitate (max +30% pentru un boost mare)
-  const prodFactorFromBoost = 1 + Math.min(0.30, Math.max(0, (S.boost?.percent||0)/100 * 0.30));
-  const ovenCapPerMin = Math.ceil(baseCapPerMin * prodFactorFromBoost);
+    let ingredientCap = computeCap();
+    if (ingredientCap <= 0) {
+      ensureAutoSupplies(true, k);
+      S = FK.getState();
+      prod = S.products?.[k] || prod;
+      ingredientCap = computeCap();
+    }
 
-  const rid = (prod?.recipeId)||'croissant_plain';
-  const need = (S.recipes?.[rid]?.ingredients)||{};
-  const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([id,qty]) => Math.floor(((S.ingredients?.[id]?.qty)||0)/Math.max(1,qty)))) : planPerMin;
+    const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, ingredientCap || 0));
+    if (made > 0) {
+      FK.consumeFor(rid, made);
+      const baseQ = 0.86
+        + (S.upgrades?.ovenPlus ? 0.02 : 0)
+        + (S.upgrades?.timerAuto ? 0.02 : 0)
+        + (S.boost?.qBonus || 0);
+      const noise = (Math.random() * 0.06) - 0.03;
+      addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
+    }
+  }
 
-  const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, maxByStoc||0));
-  if(made>0){
-    FK.consumeFor(rid, made);
-    const baseQ = 0.86 + (S.upgrades?.ovenPlus?0.02:0) + (S.upgrades?.timerAuto?0.02:0) + (S.boost?.qBonus||0);
-    const noise = (Math.random()*0.06)-0.03;
-    addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
+  const Nday = trafficN();
+  const lambdaMin = Nday / DAY_MINUTES;
+  const arrivals = (Math.random() < lambdaMin ? 1 : 0)
+    + (Math.random() < lambdaMin ? 1 : 0)
+    + (Math.random() < lambdaMin ? 1 : 0);
+
+  const baseMu = (FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier || 1)
+    : ((S.capacity?.cashierMu || 1.5) + (S.upgrades?.posRapid ? 0.8 : 0) + Math.max(0, (S.staff?.cashier || 1) - 1) * 0.5));
+  const sw = seasonWeather();
+  const evm = eventMods();
+  let W = waitW(arrivals, baseMu) + (S.boost?.wBonus || 0) + (sw.wait || 0) + (evm.wait || 0);
+  W = Math.max(0, W);
+
+  const P0 = prod.P0 || 10;
+  let P = prod.price || P0;
+  const hh = prod.happyHour || { enabled:false, start:'16:00', end:'17:00', discount:0.10 };
+  const HHs = toMinutes(hh.start);
+  const HHe = toMinutes(hh.end);
+  if (hh.enabled && S.timeMin >= HHs && S.timeMin < HHe) {
+    P = P * (1 - clamp(hh.discount || 0.10, 0.05, 0.25));
+  }
+
+  const Q = Math.max(0, Math.min(1, avgQuality() + (S.boost?.qBonus || 0) + (sw.qBonus || 0) + (evm.qBonus || 0)));
+  const C = clamp(conversionC(P, P0, Q, W) + (evm.conv || 0), 0, 0.95);
+
+  const demandMin = Math.max(0, Math.round(arrivals * C));
+  const { sold } = consumeInventory(Math.min(totalStock(), demandMin));
+  const rev = sold * P;
+  const unitCost = (prod.cost?.ingredients || 3) + (prod.cost?.laborVar || 0.5);
+  const cogs = sold * unitCost;
+
+  const A = S.autosim.aggregates || (S.autosim.aggregates = defaultAggregates());
+  A.sold += sold;
+  A.rev += rev;
+  A.cogs += cogs;
+  A.N = Nday;
+  A.steps = (A.steps || 0) + 1;
+  A.Q = ((A.Q || 0) * (A.steps - 1) + Q) / A.steps;
+  A.W = ((A.W || 0) * (A.steps - 1) + W) / A.steps;
+  A.C = ((A.C || 0) * (A.steps - 1) + C) / A.steps;
+
+  S.cash = (S.cash || 0) + rev;
+
+  FK.tickBuffs(1);
+
+  FK.setState(S);
+  refreshTop();
+  setMetrics({
+    N: Nday,
+    C: A.C,
+    W: A.W,
+    Q: A.Q,
+    sold: A.sold,
+    rev: A.rev,
+    profit: (A.rev - A.cogs)
+  });
+
+  if (S.timeMin >= dayStart + DAY_MINUTES) {
+    endOfDay();
   }
 }
 
 
-  // trafic minute + sosiri
-  const Nday      = trafficN();
-  const lambdaMin = Nday / DAY_MINUTES;
-  const arrivals  = (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0);
-
-  // servicii
-  const baseMu = (FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier||1) : ((S.capacity?.cashierMu||1.5) + (S.upgrades?.posRapid?0.8:0) + Math.max(0,(S.staff?.cashier||1)-1)*0.5));
-  const sw = seasonWeather();
-  const evm = eventMods();
-  let W = waitW(arrivals, baseMu) + (S.boost?.wBonus||0) + (sw.wait||0) + (evm.wait||0);
-  W = Math.max(0, W);
-
-  // preț / happy-hour
-  const P0 = prod.P0 || 10; let P = prod.price || P0;
-  const hh = prod.happyHour||{enabled:false,start:'16:00',end:'17:00',discount:0.10};
-  const HHs=toMinutes(hh.start), HHe=toMinutes(hh.end);
-  if(hh.enabled && S.timeMin>=HHs && S.timeMin<HHe) P = P * (1 - clamp(hh.discount||0.10,0.05,0.25));
-
-  // calitate + conversie
-  const Q = Math.max(0, Math.min(1, avgQuality() + (S.boost?.qBonus||0) + (sw.qBonus||0) + (evm.qBonus||0)));
-  const C = clamp(conversionC(P,P0,Q,W) + (evm.conv||0), 0, 0.95);
-
-  // cerere minut & vânzare din stoc
-  const demandMin   = Math.max(0, Math.round(arrivals * C));
-  const { sold }    = consumeInventory(Math.min(totalStock(), demandMin));
-  const rev         = sold * P;
-  const unitCost    = (prod.cost?.ingredients||3) + (prod.cost?.laborVar||0.5);
-  const cogs        = sold * unitCost;
-
-  // agregate zi
-  const A=S.autosim.aggregates || (S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0});
-  A.sold+=sold; A.rev+=rev; A.cogs+=cogs; A.N=Nday; A.C=C; A.W=W; A.Q=Q;
-
-  // cash (doar venituri, costuri zilnice la endOfDay)
-  S.cash = (S.cash||0) + rev;
-
-  // Buffs tick
-  FK.tickBuffs(1);
-
-  // persist & UI
-  FK.setState(S);
-  refreshTop();
-  setMetrics({
-    N:Nday, C, W, Q,
-    sold:A.sold, rev:A.rev,
-    profit: (A.rev - A.cogs) // simplu live; costuri fixe la end-of-day
-  });
-
-  // end-of-day
-  if(S.timeMin >= dayStart + DAY_MINUTES){ endOfDay(); }
-}
-
 // ---------- End of Day ----------
 function endOfDay(){
   S = FK.getState();
-  const k    = activeKey();
-  const prod = S.products[k];
-  const A    = S.autosim.aggregates || {sold:0,rev:0,cogs:0,N:0,C:0,W:0,Q:0};
+  const key   = (FK.getActiveProductKey && FK.getActiveProductKey()) || (S.activeProduct || 'croissant');
+  const prod  = S.products?.[key];
+  const A     = S.autosim.aggregates || defaultAggregates();
 
   const stockLeft   = totalStock();
   const holding     = stockLeft * 0.10;
-  const marketingCost = (S.marketing.socialToday?150:0) + ((S.marketing.flyerDaysLeft||0)>0 ? 80 : 0);
+  const marketingCost = (S.marketing.socialToday ? 150 : 0) + ((S.marketing.flyerDaysLeft || 0) > 0 ? 80 : 0);
 
-  // payroll + mood via staff API
-  const complaints = Math.max(0, (A.N>0)? (1 - A.sold/Math.max(1, Math.round(A.N*A.C))) : 0);
-  const payroll    = FK.staffDailyTick ? FK.staffDailyTick({avgW:A.W||0, complaints}) : (FK.teamSummary()?.payroll||0);
+  const served = Math.max(1, Math.round((A.N || 0) * (A.C || 0)));
+  const complaints = Math.max(0, (A.N || 0) > 0 ? (1 - (A.sold || 0) / Math.max(1, served)) : 0);
+  const payroll = FK.staffDailyTick ? FK.staffDailyTick({ avgW: A.W || 0, complaints }) : (FK.teamSummary()?.payroll || 0);
 
   const fixed  = 150;
-  const profit = (A.rev||0) - (A.cogs||0) - holding - marketingCost - fixed - payroll;
+  const profit = (A.rev || 0) - (A.cogs || 0) - holding - marketingCost - fixed - payroll;
 
-  // expirare stoc & perisabile
-  try{
-    const L = prod.shelfLifeDays||2;
-    (prod.stock||[]).forEach(l=> l.age = (l.age||0)+1);
-    prod.stock = (prod.stock||[]).filter(l=> (l.age||0) < L);
-    ['milk','strawberries'].forEach(id=>{
-      const it = S.ingredients?.[id];
-      if(it && it.qty>0){ it.qty = Math.max(0, it.qty - Math.ceil(it.qty*0.20)); }
+  try {
+    const life = prod?.shelfLifeDays || 2;
+    if (prod?.stock) {
+      prod.stock.forEach(l => l.age = (l.age || 0) + 1);
+      prod.stock = prod.stock.filter(l => (l.age || 0) < life);
+    }
+    ['milk','strawberries'].forEach(id => {
+      const item = S.ingredients?.[id];
+      if (item && item.qty > 0) { item.qty = Math.max(0, item.qty - Math.ceil(item.qty * 0.20)); }
     });
-  }catch(_){}
+  } catch (_) {}
 
-  // reputație
-  const rho=ECON.rho;
-  const f = Math.max(0.80, Math.min(1.20, 0.9 + 0.25*((A.Q||0)-0.85) - 0.05*complaints));
-  S.reputation = Math.max(0.80, Math.min(1.20, rho*(S.reputation||1) + (1-rho)*f));
+  const rho = ECON.rho;
+  const qualityFactor = Math.max(0.80, Math.min(1.20, 0.9 + 0.25 * ((A.Q || 0) - 0.85) - 0.05 * complaints));
+  S.reputation = Math.max(0.80, Math.min(1.20, rho * (S.reputation || 1) + (1 - rho) * qualityFactor));
 
-  // raport
-  S.today = { report: { sold:A.sold||0, revenue:A.rev||0, cogs:A.cogs||0, holding, marketing:marketingCost, fixed, payroll, profit, Q:A.Q||0, W:A.W||0, C:A.C||0 } };
+  const summary = {
+    sold: A.sold || 0,
+    rev: A.rev || 0,
+    cogs: A.cogs || 0,
+    profit,
+    Q: A.Q || 0,
+    W: A.W || 0,
+    C: A.C || 0
+  };
 
-  // marketing (consum)
-  if((S.marketing.flyerDaysLeft||0)>0) S.marketing.flyerDaysLeft--;
-  S.marketing.socialToday=false;
+  S.today = {
+    report: {
+      sold: summary.sold,
+      revenue: summary.rev,
+      cogs: summary.cogs,
+      holding,
+      marketing: marketingCost,
+      fixed,
+      payroll,
+      profit: summary.profit,
+      Q: summary.Q,
+      W: summary.W,
+      C: summary.C
+    }
+  };
 
-  // reset agregate
-  S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0};
+  if ((S.marketing.flyerDaysLeft || 0) > 0) S.marketing.flyerDaysLeft--;
+  S.marketing.socialToday = false;
 
-  // avansează ziua în world & vreme
-  S.day = (S.day||1)+1;
+  S.autosim.aggregates = defaultAggregates();
+
+  S.day = (S.day || 1) + 1;
   S.timeMin = S.world?.open || 8*60;
-  S.world = S.world || {year:1,season:'primavara',day:S.day,minute:S.timeMin,open:8*60,close:8*60+DAY_MINUTES};
-  S.world.day = (S.world.day||1)+1;
-  if(S.world.day>28){ S.world.day=1; S.world.season = (S.world.season==='primavara'?'vara':S.world.season==='vara'?'toamna':S.world.season==='toamna'?'iarna':'primavara'); }
+  S.world = S.world || { year:1, season:'primavara', day:S.day, minute:S.timeMin, open:8*60, close:8*60 + DAY_MINUTES };
+  S.world.day = (S.world.day || 1) + 1;
+  if (S.world.day > 28) {
+    S.world.day = 1;
+    S.world.season = (S.world.season === 'primavara' ? 'vara'
+      : S.world.season === 'vara' ? 'toamna'
+      : S.world.season === 'toamna' ? 'iarna'
+      : 'primavara');
+  }
   S.world.minute = S.world.open;
-  try{ FK.rollWeather && FK.rollWeather(S.world.season); }catch(_){}
-  try{ FK.questEndOfDay && FK.questEndOfDay(S.autosim.aggregates); }catch(_){}
+  try { FK.rollWeather && FK.rollWeather(S.world.season); } catch (_) {}
+  try { FK.questEndOfDay && FK.questEndOfDay(summary); } catch (_) {}
 
-  // persist & UI
   FK.setState(S);
   refreshTop();
 }
@@ -373,21 +524,26 @@ function endOfDay(){
 // ---------- Control rulare ----------
 function setPaused(paused){
   S = FK.getState();
-  S.autosim = S.autosim || {running:false, speed:1, tickMsBase:200, aggregates:{sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0}};
+  S.autosim = S.autosim || { running:false, speed:1, tickMsBase:200, aggregates: defaultAggregates() };
+  S.autosim.aggregates = S.autosim.aggregates || defaultAggregates();
   S.autosim.running = !paused;
-  btnPause.textContent = paused? '▶️ Reia' : '⏸️ Pauză';
-  $$('#left-controls input, #left-controls select, #left-controls button').forEach(el=>{ el.disabled = !paused && el.id!=='btn-rnd'; });
+  btnPause.textContent = paused ? 'Reia' : 'Pauza';
+  $$('#left-controls input, #left-controls select, #left-controls button').forEach(el => { el.disabled = !paused && el.id !== 'btn-rnd'; });
+  updateTicker(paused ? 'Simulare in pauza' : 'Simulare activa');
   FK.setState(S);
 }
 function setSpeed(mult){
   S = FK.getState();
   S.autosim = S.autosim || {};
   S.autosim.speed = mult;
-  speedBtns.forEach(b=> b.classList.toggle('active', Number(b.dataset.speed)===mult));
+  speedBtns.forEach(b => b.classList.toggle('active', Number(b.dataset.speed) === mult));
   FK.setState(S);
 }
 function loopStart(){
   if(window.__tick){ clearInterval(window.__tick); }
+  const tick = ()=>{ for(let i=0;i<(FK.getState().autosim?.speed||1); i++) stepAuto(); };
+  window.__tick = setInterval(tick, FK.getState().autosim?.tickMsBase || 200);
+}
   const tick = ()=>{ for(let i=0;i<(FK.getState().autosim?.speed||1); i++) stepAuto(); };
   window.__tick = setInterval(tick, FK.getState().autosim?.tickMsBase || 200);
 }
@@ -589,8 +745,6 @@ function mountBuyBtn(){
   topRight.insertBefore(btn, topRight.lastElementChild);
   btn.addEventListener('click', openIngModal);
 }
-const PRICE = { flour:2, milk:3, sugar:2, cacao:5, chocolate_chips:6, strawberries:5, coconut:4, sprinkles:3,
-                butter:5, eggs:3, yeast:3, vanilla:6, chocolate_glaze:7, cream:6, blueberries:6 };
 function openIngModal(){
   const modal = document.createElement('div'); modal.id='ing-modal';
   Object.assign(modal.style,{position:'fixed',inset:'0',background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'99999'});
@@ -629,7 +783,13 @@ function openIngModal(){
   Object.keys(PRICE).forEach(id=> list.appendChild(makeRow(id)));
   modal.querySelector('#ing-buy').addEventListener('click',()=>{
     let spent=0; Object.entries(cart).forEach(([id,qty])=>{ if(qty>0){ const ok=FK.buyIngredient(id,qty,PRICE); if(ok) spent+=(PRICE[id]||0)*qty; }});
-    if(spent>0){ refreshTop(); }
+    if(spent>0){
+      refreshTop();
+      updateTicker(`Aprovizionare finalizata (${spent} lei)`);
+      celebrate('Stoc aprovizionat!');
+    } else {
+      updateTicker('Aprovizionare anulata');
+    }
     close();
   });
 }
@@ -678,10 +838,18 @@ function mountEventsCard(){
       const box=document.getElementById('ev-upcoming');
       box.innerHTML = up.length? ('urmează: ' + up.map(x=> `${x.season.slice(0,3)}-${x.day}: ${x.label||x.id}`).join(' · ')) : '—';
       // bind joins
-      document.querySelectorAll('.ev-join').forEach(b=>{
-        b.addEventListener('click', ()=>{
-          FK.joinTodayFestival && FK.joinTodayFestival(b.dataset.id);
-          refreshTop(); updateTickerBadge(); refresh();
+      document.querySelectorAll('.ev-join').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const joined = FK.joinTodayFestival && FK.joinTodayFestival(btn.dataset.id);
+          if (joined) {
+            refreshTop();
+            try{ updateTickerBadge && updateTickerBadge(); }catch(_){}
+            refresh();
+            updateTicker('Festival activ');
+            celebrate('Festival activ!');
+          } else {
+            updateTicker('Nu sunt fonduri pentru festival');
+          }
         });
       });
     };
@@ -693,38 +861,47 @@ function mountEventsCard(){
 // ---------- Quests Card ----------
 function mountQuestsCard(){
   try{
-    const host=document.getElementById('right-metrics');
+    const host = document.getElementById('right-metrics');
     if(!host || document.getElementById('card-quests')) return;
-    const card=document.createElement('div'); card.id='card-quests'; card.className='panel soft';
-    card.innerHTML=`<h3 style="margin-top:0">Quests azi</h3><div id="q-list" class="small"></div>`;
+    const card = document.createElement('div'); card.id = 'card-quests'; card.className = 'panel soft';
+    card.innerHTML = `<h3 style="margin-top:0">Quests azi</h3><div id="q-list" class="small"></div>`;
     host.appendChild(card);
-    const render=()=>{
-      try{ FK.ensureDailyQuests && FK.ensureDailyQuests(); }catch(_){}
-      const qs=(FK.getQuests && FK.getQuests().daily)||[];
-      const box=document.getElementById('q-list');
-      const bar=(p,t,rev=false)=>{
-        const pct = Math.max(0, Math.min(100, Math.round((rev? (p<=t?100:0) : (p/t*100)) )));
-        return `<div class="bar" style="height:8px"><span style="display:block;height:8px;width:${pct}%;background:#69c56f"></span></div>`;
-      };
-      box.innerHTML = qs.map(q=>{
-        let prog = q.type==='sold'? `${q.progress}/${q.target}` :
-                   q.type==='qavg'? `${Number(q.progress||0).toFixed(2)}≥${q.target}` :
-                   q.type==='wait'? `${Number(q.progress||0).toFixed(2)}≤${q.target}` : '';
-        const isReady = q.status==='ready';
-        const btn = isReady? `<button class="btn small q-claim" data-id="${q.id}">Revendică</button>` : '';
-        const meter = q.type==='sold'? bar(q.progress,q.target)
-                    : q.type==='qavg'? bar(q.progress, q.target)
-                    : q.type==='wait'? bar(q.progress, q.target, true) : '';
-        const reward = q.reward?.cash? (`+${q.reward.cash} lei`) : (q.reward?.buff? (q.reward.buff.label||'buff') : '');
+    const bar = (value, target, inverted = false) => {
+      if (target <= 0) target = 1;
+      const ratio = inverted ? (value <= target ? 1 : Math.max(0, target / Math.max(1, value))) : Math.min(1, value / target);
+      const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+      return `<div class="bar" style="height:8px"><span style="display:block;height:8px;width:${pct}%;background:#69c56f"></span></div>`;
+    };
+    const render = () => {
+      try { FK.ensureDailyQuests && FK.ensureDailyQuests(); } catch (_) {}
+      const quests = (FK.getQuests && FK.getQuests().daily) || [];
+      const box = document.getElementById('q-list');
+      if (!box) return;
+      box.innerHTML = quests.map(q => {
+        const ready = q.status === 'ready';
+        let progressText = '';
+        let meter = '';
+        if (q.type === 'sold') { progressText = `${q.progress || 0}/${q.target}`; meter = bar(q.progress || 0, q.target); }
+        else if (q.type === 'qavg') { progressText = `${Number(q.progress || 0).toFixed(2)} >= ${q.target}`; meter = bar(q.progress || 0, q.target); }
+        else if (q.type === 'wait') { progressText = `${Number(q.progress || 0).toFixed(2)} <= ${q.target}`; meter = bar(q.progress || 0, q.target, true); }
+        else if (q.type === 'revenue') { progressText = `${Math.round(q.progress || 0)} / ${q.target} lei`; meter = bar(q.progress || 0, q.target); }
+        else if (q.type === 'profit') { progressText = `${Math.round(q.progress || 0)} / ${q.target} lei`; meter = bar(q.progress || 0, q.target); }
+        const reward = q.reward?.cash ? `+${q.reward.cash} lei` : (q.reward?.buff ? (q.reward.buff.label || 'Bonus') : '');
+        const button = ready ? `<button class="btn small q-claim" data-id="${q.id}">Revendica</button>` : '';
         return `<div style="display:grid;grid-template-columns:1fr auto;gap:.4rem;align-items:center;margin:.25rem 0">
-          <div><b>${q.label}</b><div class="small muted">${prog} · reward: ${reward}</div>${meter}</div>
-          <div>${btn}</div>
+          <div><b>${q.label}</b><div class="small muted">${progressText} | reward: ${reward}</div>${meter}</div>
+          <div>${button}</div>
         </div>`;
       }).join('');
-      box.querySelectorAll('.q-claim').forEach(b=>{
-        b.addEventListener('click', ()=>{
-          FK.claimQuest && FK.claimQuest(b.dataset.id);
-          refreshTop(); updateTickerBadge(); render();
+      box.querySelectorAll('.q-claim').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (FK.claimQuest && FK.claimQuest(btn.dataset.id)) {
+            refreshTop();
+            try{ updateTickerBadge && updateTickerBadge(); }catch(_){}
+            updateTicker('Quest revendicat');
+            celebrate('Quest complet!');
+            setTimeout(render, 150);
+          }
         });
       });
     };
@@ -791,16 +968,34 @@ function openRNDModal(){
       rndList.appendChild(row);
     });
     // bind
-    rndList.querySelectorAll('.act-unlock').forEach(b=>{
-      b.addEventListener('click', ()=>{ const ok = FK.unlockProduct && FK.unlockProduct(b.dataset.k, 300); if(ok){ paint(); refreshTop(); } });
+    rndList.querySelectorAll('.act-unlock').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const ok = FK.unlockProduct && FK.unlockProduct(btn.dataset.k, 300);
+        if(ok){
+          paint();
+          refreshTop();
+          const current = FK.getState();
+          const name = current.products?.[btn.dataset.k]?.name || 'Produs';
+          updateTicker(`${name} deblocat`);
+          celebrate('Produs deblocat!');
+        } else {
+          updateTicker('Nu sunt fonduri pentru R&D');
+        }
+      });
     });
-    rndList.querySelectorAll('.act-test').forEach(b=>{
-      b.addEventListener('click', ()=>{
-        const k=b.dataset.k; const S=FK.getState(); const rid=(S.products?.[k]?.recipeId)||'croissant_plain';
-        if(!FK.canProduce(rid, 6)){ alert('Stoc ingrediente insuficient pentru prototip.'); return; }
-        FK.consumeFor(rid, 6); FK.addInventory(k, 6, Math.max(0.88, Math.min(0.98, 0.9+(Math.random()*0.06-0.03))));
-        FK.addBuff({id:'prototypeHype', label:`Hype ${S.products[k].name}`, minutes:45, trafficMult:1.06, qBonus:0.01});
-        refreshTop(); alert('Prototip servit! +6 stoc & hype.');
+    rndList.querySelectorAll('.act-test').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const key = btn.dataset.k;
+        const current = FK.getState();
+        const rid = (current.products?.[key]?.recipeId) || 'croissant_plain';
+        if(!FK.canProduce(rid, 6)){ updateTicker('Ingrediente insuficiente pentru prototip'); return; }
+        FK.consumeFor(rid, 6);
+        FK.addInventory(key, 6, Math.max(0.88, Math.min(0.98, 0.9 + (Math.random()*0.06 - 0.03))));
+        const name = current.products?.[key]?.name || 'Produs';
+        FK.addBuff({ id:'prototypeHype', label:`Hype ${name}`, minutes:45, trafficMult:1.06, qBonus:0.01 });
+        refreshTop();
+        updateTicker(`Prototip servit pentru ${name}`);
+        celebrate('Prototip reusit!');
       });
     });
   };

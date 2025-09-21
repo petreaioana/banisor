@@ -488,10 +488,29 @@ export const FK = (() => {
   // ---------- Quests ----------
   function _makeDailyQuests() {
     const w = S.world || { season: 'primavara', day: 1 };
-    const q1 = { id: `dq_sold_${w.season}_${w.day}`, label: 'Vinde 120 bucăți azi', type: 'sold', progress: 0, target: 120, reward: { cash: 120 }, status: 'active', expires: { season: w.season, day: w.day } };
-    const q2 = { id: `dq_quality_${w.season}_${w.day}`, label: 'Q medie ≥ 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } };
-    const q3 = { id: `dq_wait_${w.season}_${w.day}`, label: 'Timp mediu W ≤ 2.0', type: 'wait', progress: 0, target: 2.0, reward: { cash: 80 }, status: 'active', expires: { season: w.season, day: w.day } };
-    return [q1, q2, q3];
+    const rep = S.reputation || 1;
+    const soldTarget = Math.round(110 + (rep - 1) * 60 + Math.random() * 40);
+    const soldStretch = soldTarget + 40;
+    const waitTarget = Number(Math.max(1.6, 2.4 - Math.min(0.6, (rep - 1) * 0.5)).toFixed(2));
+    const revenueTarget = Math.round(900 + Math.random() * 400);
+    const profitTarget = Math.round(320 + Math.random() * 260);
+
+    const questPool = [
+      { id: `dq_sold_${w.season}_${w.day}`, label: `Vinde ${soldTarget} produse`, type: 'sold', progress: 0, target: soldTarget, reward: { cash: soldTarget }, status: 'active', expires: { season: w.season, day: w.day } },
+      { id: `dq_sold_big_${w.season}_${w.day}`, label: `Impinge pana la ${soldStretch} buc`, type: 'sold', progress: 0, target: soldStretch, reward: { buff: { id: 'trafficRush', label: 'Trafic suplimentar', minutes: 60, trafficMult: 1.12 } }, status: 'active', expires: { season: w.season, day: w.day } },
+      { id: `dq_quality_${w.season}_${w.day}`, label: 'Pastreaza Q medie >= 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } },
+      { id: `dq_wait_${w.season}_${w.day}`, label: `Timp mediu <= ${waitTarget}`, type: 'wait', progress: 0, target: waitTarget, reward: { cash: 90 }, status: 'active', expires: { season: w.season, day: w.day } },
+      { id: `dq_rev_${w.season}_${w.day}`, label: `Incaseaza ${revenueTarget} lei`, type: 'revenue', progress: 0, target: revenueTarget, reward: { cash: 120 }, status: 'active', expires: { season: w.season, day: w.day } },
+      { id: `dq_profit_${w.season}_${w.day}`, label: `Profit de ${profitTarget} lei`, type: 'profit', progress: 0, target: profitTarget, reward: { buff: { id: 'profitFocus', label: 'Focus pe profit', minutes: 50, trafficMult: 1.04, qBonus: 0.01 } }, status: 'active', expires: { season: w.season, day: w.day } }
+    ];
+
+    const picks = [];
+    const pool = questPool.slice();
+    while (picks.length < 4 && pool.length) {
+      const idx = Math.floor(Math.random() * pool.length);
+      picks.push(pool.splice(idx, 1)[0]);
+    }
+    return picks;
   }
   function ensureDailyQuests() {
     const w = S.world || { day: S.day || 1 };
@@ -507,12 +526,31 @@ export const FK = (() => {
     const sold = Math.round(agg?.sold || 0);
     const qavg = Number((agg?.Q || 0).toFixed(2));
     const wavg = Number((agg?.W || 0).toFixed(2));
+    const revenue = Math.round(agg?.rev || agg?.revenue || 0);
+    const profit = Math.round(agg?.profit || 0);
     d.forEach(q => {
-      if (q.type === 'sold') { q.progress = sold; if (sold >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
-      if (q.type === 'qavg') { q.progress = qavg; if (qavg >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
-      if (q.type === 'wait') { q.progress = wavg; if (wavg <= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
+      if (q.type === 'sold') {
+        q.progress = sold;
+        if (sold >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
+      }
+      if (q.type === 'qavg') {
+        q.progress = qavg;
+        if (qavg >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
+      }
+      if (q.type === 'wait') {
+        q.progress = wavg;
+        if (wavg <= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
+      }
+      if (q.type === 'revenue') {
+        q.progress = revenue;
+        if (revenue >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
+      }
+      if (q.type === 'profit') {
+        q.progress = profit;
+        if (profit >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
+      }
     });
-    save(); emit('quests:updated', { sold, qavg, wavg });
+    save(); emit('quests:updated', { sold, qavg, wavg, revenue, profit });
   }
   function claimQuest(id) {
     const all = [...(S.quests?.daily || []), ...(S.quests?.weekly || [])];
