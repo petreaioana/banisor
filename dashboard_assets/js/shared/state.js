@@ -1,4 +1,4 @@
-/* ========== UnificareExport | dashboard_assets\js\shared\state.js ========== */
+﻿/* ========== UnificareExport | dashboard_assets\js\shared\state.js ========== */
 
 // dashboard_assets/js/shared/state.js
 // =====================================================
@@ -93,6 +93,15 @@ export const FK = (() => {
 
 
 
+  function makeDefaultState(startCash = 1000, slot = 'autosave') {
+    const base = JSON.parse(JSON.stringify(DEF));
+    base.cash = startCash;
+    base.meta = { lastSeenTs: Date.now(), slot, config: { economy: null, policies: null } };
+    base.world = base.world || { year: 1, season: 'primavara', day: 1, minute: 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES };
+    base.world.minute = base.world.open;
+    return base;
+  }
+
   // LocalStorage chei pe slot
   const SLOT_KEYS = { A: 'fk_slot_A', B: 'fk_slot_B', C: 'fk_slot_C', autosave: 'fk_slot_autosave' };
   const SLOT_LAST = (s) => `fk_last_seen_${s}`;
@@ -107,7 +116,7 @@ export const FK = (() => {
     timeMin: 8 * 60,
 
     // economie & reputație
-    cash: 500,
+    cash: 1000,
     reputation: 1.00,
     economyIndex: 1.00,
 
@@ -319,6 +328,33 @@ export const FK = (() => {
       try { save(); } catch (_) { }
     }
   })();
+
+  function resetAllSlots(startCash = 1000) {
+    const now = Date.now();
+    S = makeDefaultState(startCash, 'autosave');
+    ensureKidFriendlyStructures();
+    S.meta = S.meta || { lastSeenTs: now, slot: 'autosave', config: { economy: null, policies: null } };
+    S.meta.slot = 'autosave';
+    S.meta.lastSeenTs = now;
+    S.world = S.world || { year: 1, season: 'primavara', day: 1, minute: 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES };
+    S.world.minute = S.world.open;
+    save();
+    const snapshot = JSON.stringify(S);
+    Object.entries(SLOT_KEYS).forEach(([slot, storageKey]) => {
+      if (slot === 'autosave') return;
+      try {
+        const clone = JSON.parse(snapshot);
+        clone.meta = clone.meta || { lastSeenTs: now, slot };
+        clone.meta.slot = slot;
+        clone.meta.lastSeenTs = now;
+        localStorage.setItem(storageKey, JSON.stringify(clone));
+        localStorage.setItem(SLOT_LAST(slot), String(now));
+      } catch (_) { }
+    });
+    localStorage.setItem('fk_active_slot', 'autosave');
+    emit('state:reset', { cash: startCash });
+    return S;
+  }
 
   // ---------- Persistență (salvare pe slot + beacon către server) ----------
   function save() {
@@ -1348,7 +1384,7 @@ export const FK = (() => {
     addInventory, totalStock, canProduce, consumeFor, buyIngredient,
 
     // Sloturi
-    getActiveSlot, setActiveSlot, listSlots, saveToSlot, deleteSlot, duplicateSlot,
+    getActiveSlot, setActiveSlot, listSlots, saveToSlot, deleteSlot, duplicateSlot, resetAllSlots,
 
     // Utils
     clamp, DAY_MINUTES,

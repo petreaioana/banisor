@@ -12,6 +12,7 @@ let goalStarsEl;
 let goalProgressEl;
 let summaryEl;
 let leftControls;
+let resetBtn;
 let offlineNotice = null;
 
 function smartEnabled() {
@@ -151,7 +152,8 @@ export function initSmartManagerUI() {
       <h4>Rezumat</h4>
       <div data-summary>Încă nu avem date pentru ziua curentă.</div>
     </div>
-    <div class="smart-note small muted">Controalele detaliate din stânga sunt gestionate automat când Smart Manager este ON.</div>
+    <div class="smart-note small muted">Controalele detaliate din stânga sunt gestionate automat când Smart Manager este ON. Poți reseta totul oricând pentru a reîncepe cu 1000 lei.</div>
+    <button type="button" class="btn danger full" data-role="reset-progress">Resetează jocul</button>
   `;
 
   leftControls.prepend(root);
@@ -165,11 +167,19 @@ export function initSmartManagerUI() {
   goalStarsEl = root.querySelector('[data-goal-stars]');
   goalProgressEl = root.querySelector('[data-goal-progress]');
   summaryEl = root.querySelector('[data-summary]');
+  resetBtn = root.querySelector('[data-role="reset-progress"]');
 
   toggleBtn.addEventListener('click', handleToggle);
   focusButtons.forEach((btn) => {
     btn.addEventListener('click', () => handleFocusChange(btn.dataset.focus));
   });
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (!window.confirm('Ești sigur că vrei să ștergi toate salvările și să reîncepi cu 1000 lei?')) return;
+      try { FK.resetAllSlots && FK.resetAllSlots(1000); } catch (err) { console.error('[SmartUI] resetAllSlots', err); }
+      window.location.reload();
+    });
+  }
 
   refreshSmartManagerUI();
 }
