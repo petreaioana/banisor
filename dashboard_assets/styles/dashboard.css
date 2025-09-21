@@ -267,3 +267,31 @@ aside{
   aside{ order:2 }
   #center{ order:1; min-height: 52vh; }
 }
+
+/* Smart Manager UI */
+.smart-manager{background:#fff7e6;border:2px solid #f5c05f;border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:0 8px 18px rgba(0,0,0,.08)}
+.smart-manager .smart-header{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.smart-manager .smart-toggle{background:#f2994a;color:#fff;border:none;border-radius:999px;padding:.5rem 1.2rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(242,153,74,.3)}
+.smart-manager .smart-toggle[aria-pressed="false"]{background:#d9d9d9;color:#333}
+.smart-manager .smart-focus{display:flex;gap:.5rem}
+.smart-manager .smart-focus .focus-btn{display:flex;align-items:center;gap:.35rem;border:1px solid #f5c05f;background:#fff;padding:.4rem .7rem;border-radius:10px;font-weight:600;cursor:pointer;transition:background .2s}
+.smart-manager .smart-focus .focus-btn.active{background:#ffe0a3}
+.smart-manager .smart-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}
+.smart-card{background:#fff;padding:.9rem;border-radius:12px;box-shadow:0 10px 18px rgba(0,0,0,.05)}
+.smart-card h3{margin-top:0;margin-bottom:.6rem;font-size:1.05rem;color:#a46606}
+.smart-card ul{list-style:none;margin:0;padding:0;display:grid;gap:.35rem;font-size:.95rem}
+.smart-card ul li strong{color:#0c6f4f}
+.smart-progress{height:12px;background:#ffe0a3;border-radius:999px;overflow:hidden;position:relative;margin-bottom:.5rem}
+.smart-progress-bar{height:100%;width:0;background:linear-gradient(90deg,#ffb347,#ffcc33);transition:width .3s ease}
+.smart-stars{font-size:1.4rem;letter-spacing:.3rem;color:#ffcc33;margin-bottom:.4rem}
+.smart-progress-text{margin:0;font-size:.9rem;color:#5c4a24}
+.smart-boost{margin-top:.6rem;border:none;border-radius:999px;padding:.45rem 1rem;background:#6fcf97;color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 16px rgba(111,207,151,.3)}
+.smart-boost:disabled{background:#a8d5bf;cursor:default}
+.smart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100000}
+.smart-overlay.hidden{display:none}
+.smart-modal{background:#fff;min-width:320px;max-width:420px;padding:1.2rem;border-radius:14px;box-shadow:0 18px 32px rgba(0,0,0,.25);text-align:center}
+.smart-modal h2{margin-top:0;margin-bottom:.75rem;color:#a45700}
+.smart-modal p{margin:.4rem 0;font-size:.95rem}
+.smart-modal .btn.smart-modal-close{margin-top:1rem;background:#f2994a;color:#fff;border:none;border-radius:999px;padding:.45rem 1.2rem;font-weight:600;cursor:pointer}
+body.smart-manager-on #left-controls{display:none}
+body.smart-manager-on .smart-manager{border-color:#f2a654;box-shadow:0 16px 32px rgba(242,166,84,.25)}

@@ -1,69 +1,69 @@
-/* ========== UnificareExport | dashboard_assets\js\dashboard\engine.js ========== */
-
-// dashboard_assets/js/dashboard/engine.js
-// =====================================================
-// FinKids Tycoon — Dashboard autosim engine (complet)
-// - Integrare FK v5 (world/seasons/weather/events/quests/staff/R&D/save-slots)
-// - Buclă de simulare pe minute de joc, cu producție matinală & vânzări
-// - UI injectată: Save Slots, R&D, Evenimente, Quests, Ingrediente
-// - Control viteză, pauză, topbar metrici, buff popover
-// =====================================================
+﻿/* ========== Smart Manager Edition | dashboard_assets\js\dashboard\engine.js ========== */
 
 import { FK } from '../shared/state.js';
+import autoManager from './autoManager.js';
+import initSmartUI from './uiSmart.js';
 
-const $  = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
-const clamp = FK.clamp;
-const DAY_MINUTES = FK.DAY_MINUTES;
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const DAY_MINUTES = FK.DAY_MINUTES || (8 * 60);
+const EARLY_WINDOW = 120;
+const LOOP_MS = 220;
 
-// Stare
+let runtime = {
+  timer: null,
+  smartUI: null,
+  configs: null,
+  diff: null,
+  kidMode: true,
+  focus: 'balanced'
+};
+
 let S = FK.getState();
+let summary = null;
+let dayPlan = null;
+let middayTriggered = false;
 
-// DOM (index.php)
-const elDay   = $('#top-day');
-const elTime  = $('#top-time');
-const elCash  = $('#top-cash');
+// DOM references
+const elDay = $('#top-day');
+const elTime = $('#top-time');
+const elCash = $('#top-cash');
 const elStock = $('#top-stock');
-const elRep   = $('#top-rep');
+const elRep = $('#top-rep');
 const elBoost = $('#top-boost');
 
-const btnPause  = $('#btn-pause');
+const btnPause = $('#btn-pause');
 const speedBtns = $$('.speed-btn');
-
-const inpPrice = $('#inp-price');
-const rngPrice = $('#rng-price');
-const inpLot   = $('#inp-lot');
-const inpHHs   = $('#inp-hh-start');
-const inpHHe   = $('#inp-hh-end');
-const inpHHd   = $('#inp-hh-disc');
-
-const chkFlyer   = $('#chk-flyer');
-const chkSocial  = $('#chk-social');
-const selCashiers= $('#sel-cashiers');
-
-const upOven = $('#up-oven');
-const upPos  = $('#up-pos');
-const upAuto = $('#up-auto');
+const ticker = $('#ticker');
+const banCorner = $('#banisor-corner');
 
 const barQ = $('#bar-q');
 const barW = $('#bar-w');
 const barC = $('#bar-c');
 const barN = $('#bar-n');
-
 const mSold = $('#m-sold');
-const mRev  = $('#m-rev');
+const mRev = $('#m-rev');
 const mProf = $('#m-prof');
 
-const ticker    = $('#ticker');
-const banCorner = $('#banisor-corner');
+const inpPrice = $('#inp-price');
+const rngPrice = $('#rng-price');
+const inpLot = $('#inp-lot');
+const selCashiers = $('#sel-cashiers');
+const chkFlyer = $('#chk-flyer');
+const chkSocial = $('#chk-social');
+const inpHHs = $('#inp-hh-start');
+const inpHHe = $('#inp-hh-end');
+const inpHHd = $('#inp-hh-disc');
+const upOven = $('#up-oven');
+const upPos = $('#up-pos');
+const upAuto = $('#up-auto');
 
-const PRICE = { flour:2, milk:3, sugar:2, cacao:5, chocolate_chips:6, strawberries:5, coconut:4, sprinkles:3,
-  butter:5, eggs:3, yeast:3, vanilla:6, chocolate_glaze:7, cream:6, blueberries:6 };
+const CONFETTI_COLORS = ['#f9d423', '#ff4e50', '#1aafd0', '#82d173', '#f78da7'];
 
-const CONFETTI_COLORS = ['#f9d423','#ff4e50','#1aafd0','#82d173','#f78da7'];
 function celebrate(message = 'Bravo!') {
   const existing = document.querySelectorAll('.confetti-overlay');
-  if (existing.length > 2) { existing[0]?.remove(); }
+  if (existing.length > 2) existing[0]?.remove();
   const layer = document.createElement('div');
   layer.className = 'confetti-overlay';
   const count = 120;
@@ -85,1007 +85,668 @@ function celebrate(message = 'Bravo!') {
   document.body.appendChild(layer);
   requestAnimationFrame(() => layer.classList.add('show'));
   setTimeout(() => layer.classList.add('hide'), 900);
-  setTimeout(() => { try { layer.remove(); } catch (_) { } }, 1600);
+  setTimeout(() => { try { layer.remove(); } catch (_) {} }, 1600);
 }
+
 function updateTicker(message) {
   if (!ticker) return;
   ticker.textContent = message;
 }
 
-async function importFromManual(clearAfter = true){
-  try{
-    const url = `game_assets/api.php?action=fetch_transfer${clearAfter ? '&clear=1' : ''}`;
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    if(!payload || !payload.ok){ updateTicker('Import esuat'); return; }
-
-    const transfer = payload.transfer || {};
-    const qty = Math.max(0, Number(transfer.qty || 0));
-    const q   = Math.max(0.70, Math.min(0.99, Number(transfer.avg_q || 0.86)));
-    const buffs = Array.isArray(transfer.buffs) ? transfer.buffs : [];
-
-    const key = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
-    if(qty > 0){ FK.addInventory(key, qty, q); }
-
-    buffs.forEach(b => {
-      const minutes = Math.max(1, Math.ceil(Number(b.seconds_left || 0) / 60));
-      FK.addBuff({
-        id: `manual_${b.id || ('b' + Date.now())}`,
-        label: b.label || 'Boost manual',
-        minutes,
-        trafficMult: Number(b.trafficMult || 1),
-        qBonus: Number(b.qBonus || 0),
-        wBonus: -0.3 * Math.max(0, (Number(b.trafficMult || 1) - 1))
-      });
-    });
-
-    if (qty === 0 && buffs.length === 0) {
-      updateTicker('Nimic de importat');
-      return;
-    }
-
-    refreshTop();
-    setMetrics({
-      sold: (FK.getState().autosim?.aggregates?.sold || 0),
-      rev:  (FK.getState().autosim?.aggregates?.rev  || 0)
-    });
-
-    const note = `Importat ${qty} buc, Q ${q.toFixed(2)}${buffs.length ? ` + ${buffs.length} boosturi` : ''}`;
-    updateTicker(note);
-    if (qty > 0 || buffs.length){
-      celebrate('Import reusit!');
-    }
-  }catch(err){
-    console.error(err);
-    updateTicker('Import esuat');
-  }
-}
-
-// Parametri economie
-const ECON = {
-  F_base: 120,        // clienți/zi (bază)
-  C0: 0.50,
-  epsilon: 1.6,       // elasticitate preț
-  alpha: 0.75,        // conversie
-  beta: 0.50,         // contribuție calitate
-  kappa: 0.60, delta: 0.10, // penalizare coadă
-  Wmax: 6, tau: 3,    // timp așteptare (cap)
-  rho: 0.75,          // smoothing reputație
-  gammaSalvage: 0.20
-};
-
-// ---------- Helpers produs activ ----------
-function activeKey(){ S=FK.getState(); return (FK.getActiveProductKey && FK.getActiveProductKey()) || (S.activeProduct||'croissant'); }
-
-function addInventory(qty,q){ FK.addInventory(activeKey(), qty, q); }
-
-function totalStock(){ return FK.totalStock(activeKey()); }
-
-function avgQuality(){
+async function bootstrap() {
   S = FK.getState();
-  const p = S.products[activeKey()];
-  let sum=0,cnt=0;
-  (p.stock||[]).forEach(l=>{ sum += (l.qty||0) * (l.q||0); cnt += (l.qty||0); });
-  return cnt>0 ? (sum/cnt) : (0.86 + (S.boost?.qBonus||0));
-}
-
-function consumeInventory(qty){
-  S = FK.getState();
-  const p = S.products[activeKey()];
-  let left = Math.max(0, Math.round(qty||0));
-  let sold=0, qWeighted=0;
-  for(const lot of p.stock){
-    if(left<=0) break;
-    const take = Math.min(lot.qty||0, left);
-    lot.qty -= take; left -= take; sold += take; qWeighted += take*(lot.q||0);
-  }
-  p.stock = p.stock.filter(l=> (l.qty||0)>0);
-  const qAvg = sold>0 ? (qWeighted/sold) : avgQuality();
-  FK.saveState();
-  return { sold, qAvg };
-}
-
-// ---------- Sezon/Meteo/Evenimente ----------
-function seasonWeather(){
-  try{
-    const sW = FK.getState().world?.season;
-    const effS = FK.seasonEffects ? FK.seasonEffects(sW) : {traffic:1,wait:0,qBonus:0};
-    const wW = FK.getState().economy2?.weather;
-    const effW = FK.weatherEffects ? FK.weatherEffects(wW) : {traffic:1,wait:0,qBonus:0,label:'—'};
-    const label = `${String(sW||'primavara')} · ${effW.label||'—'}`;
-    return { traffic: (effS.traffic||1)*(effW.traffic||1), wait: (effS.wait||0)+(effW.wait||0), qBonus:(effS.qBonus||0)+(effW.qBonus||0), label };
-  }catch(_){ return {traffic:1, wait:0, qBonus:0, label:'—'}; }
-}
-function eventMods(){
-  try{ return FK.eventModsForToday ? FK.eventModsForToday() : {traffic:1,conv:0,qBonus:0,wait:0}; }
-  catch(_){ return {traffic:1,conv:0,qBonus:0,wait:0}; }
-}
-
-function marketingBoost(){ let m=0; const S=FK.getState(); if(S.marketing.flyerDaysLeft>0) m+=0.10; if(S.marketing.socialToday) m+=0.25; return m; }
-function trafficN(){
-  const S=FK.getState();
-  const eff = seasonWeather();
-  const evm = eventMods();
-  const base = ECON.F_base
-    * (S.economyIndex||1)
-    * (S.reputation||1)
-    * eff.traffic
-    * (evm.traffic||1)
-    * (1+marketingBoost());
-  return Math.round(base * (S.boost?.trafficMult || 1));
-}
-function waitW(lambda, mu){ return clamp((lambda - mu)*ECON.tau, 0, ECON.Wmax); }
-function conversionC(P,P0,Q,W){
-  const {C0,epsilon,alpha,beta,kappa,delta} = ECON;
-  const priceTerm   = Math.exp(-epsilon * (P/P0 - 1));
-  const qualityTerm = alpha + beta * Q;
-  const waitPen     = 1 - Math.min(kappa, delta * Math.max(0,W));
-  return clamp(C0*priceTerm*qualityTerm*waitPen, 0, 0.95);
-}
-
-// ---------- Formatare ----------
-function fmtTime(min){
-  const S=FK.getState();
-  const m = Math.max(0, Math.min(min, DAY_MINUTES + (S.world?.open||8*60)));
-  const dayStart = (S.world?.open)||8*60;
-  const H = Math.floor((dayStart + (m - dayStart))/60);
-  const M = (dayStart + (m - dayStart))%60;
-  return `${H<10?'0':''}${H}:${M<10?'0':''}${M}`;
-}
-function fmt(n,d=0){
-  const f = Math.pow(10,d);
-  return (Math.round(Number(n)*f)/f).toFixed(d);
-}
-
-// ---------- UI Topbar & metrici ----------
-function refreshTop(){
-  S = FK.getState();
-  elDay.textContent  = String(S.world?.day || S.day || 1);
-  elTime.textContent = fmtTime(S.timeMin);
-  elCash.textContent = Math.round(S.cash||0);
-  elStock.textContent= totalStock();
-  elRep.textContent  = (S.reputation||1).toFixed(2);
-  const buffsCount = (S.boost?.buffs?.length)||0;
-  elBoost.textContent= Math.round(S.boost.percent||0)+'%'+(buffsCount>0?` (${buffsCount})`:'');
-  try{ if(typeof updateTickerBadge==='function') updateTickerBadge(); }catch(_){}
-}
-function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
-  barQ.style.width = Math.round(Math.max(0,Math.min(Q,1))*100)+'%';
-  barW.style.width = Math.round(Math.max(0,Math.min(W/ECON.Wmax,1))*100)+'%';
-  barC.style.width = Math.round(Math.max(0,Math.min(C,0.95))*100)+'%';
-  barN.style.width = Math.round(Math.max(0,Math.min(N/(ECON.F_base*1.5),1))*100)+'%';
-  mSold.textContent = String(sold);
-  mRev.textContent  = fmt(rev,0);
-  mProf.textContent = fmt(profit,0);
-}
-
-function defaultAggregates(){
-  return { sold:0, rev:0, cogs:0, holding:0, marketing:0, profit:0, N:0, C:0, W:0, Q:0, steps:0 };
-}
-
-function ensureAutoSupplies(force = false, productKey){
-  let state = FK.getState();
-  state.autosim = state.autosim || {};
-  const dayKey = `${state.world?.year || 1}-${state.world?.season || 'primavara'}-${state.world?.day || state.day || 1}`;
-  if (!force && state.autosim.lastRestock === dayKey) {
-    return;
-  }
-  const key = productKey || ((state.products && FK.getActiveProductKey) ? FK.getActiveProductKey() : (state.activeProduct || 'croissant'));
-  let product = state.products?.[key];
-  if (!product) return;
-  const recipeId = product.recipeId || 'croissant_plain';
-  let recipe = (state.recipes?.[recipeId]?.ingredients) || {};
-  if (Object.keys(recipe).length === 0) {
-    state.autosim.lastRestock = dayKey;
-    FK.setState({ autosim: state.autosim });
-    S = FK.getState();
-    return;
-  }
-  const planned = Math.max(1, product.plannedQty || 0);
-  const bufferUnits = Math.max(planned * 2, 80);
-  let purchased = 0;
-  let shortages = 0;
-  for (const [id, perUnit] of Object.entries(recipe)) {
-    state = FK.getState();
-    product = state.products?.[key];
-    recipe = (state.recipes?.[recipeId]?.ingredients) || {};
-    const needPerUnit = Math.max(1, Number(perUnit) || 1);
-    const target = Math.ceil(bufferUnits * needPerUnit);
-    const minLevel = Math.ceil(target * 0.6);
-    const have = Math.max(0, Math.round(state.ingredients?.[id]?.qty || 0));
-    if (have < minLevel) {
-      const buyQty = Math.min(target - have, target);
-      if (buyQty > 0) {
-        if (FK.buyIngredient(id, buyQty, PRICE)) {
-          purchased += buyQty;
-        } else {
-          shortages += 1;
-        }
-      }
-    }
-  }
-  state = FK.getState();
-  state.autosim = state.autosim || {};
-  state.autosim.lastRestock = dayKey;
-  FK.setState({ autosim: state.autosim });
-  S = FK.getState();
-  if (purchased > 0) {
-    updateTicker(`Auto restock complet (${purchased})`);
-  } else if (shortages > 0) {
-    updateTicker('Restock esuat din cauza fondurilor');
-  }
-}
-
-// ---------- Bucla minute ----------
-function toMinutes(hhmm){ const [h,m]=String(hhmm||'16:00').split(':').map(Number); return (h*60 + m); }
-
-function stepAuto(){
-  S = FK.getState();
-  if(!S.autosim?.running) return;
-
-  const productHint = S.activeProduct || undefined;
-  ensureAutoSupplies(false, productHint);
-  S = FK.getState();
-
-  const k = (FK.getActiveProductKey && FK.getActiveProductKey()) || (S.activeProduct || 'croissant');
-  let prod = S.products?.[k];
-  if(!prod) return;
-
-  const dayStart = S.world?.open || 8*60;
-
-  S.timeMin += 1;
-
-  const earlyWindow = (S.timeMin - dayStart) < 120;
-  if(earlyWindow){
-    const planPerMin = Math.max(0, Math.ceil((prod.plannedQty || 0) / 120));
-    const ovenFactor = S.upgrades?.ovenPlus ? 1.5 : 1;
-    const baseCapPerMin = ((S.capacity?.ovenBatchSize || 50) * ovenFactor * (S.capacity?.ovenBatchesPerDay || 2)) / DAY_MINUTES;
-    const prodFactorFromBoost = 1 + Math.min(0.30, Math.max(0, (S.boost?.percent || 0) / 100 * 0.30));
-    const ovenCapPerMin = Math.ceil(baseCapPerMin * prodFactorFromBoost);
-    const rid = prod?.recipeId || 'croissant_plain';
-
-    const computeCap = () => {
-      const recipe = (S.recipes?.[rid]?.ingredients) || {};
-      if (Object.keys(recipe).length === 0) return planPerMin;
-      return Math.min(...Object.entries(recipe).map(([id, qty]) => {
-        const have = Math.max(0, Math.round(S.ingredients?.[id]?.qty || 0));
-        return Math.floor(have / Math.max(1, qty));
-      }));
-    };
-
-    let ingredientCap = computeCap();
-    if (ingredientCap <= 0) {
-      ensureAutoSupplies(true, k);
-      S = FK.getState();
-      prod = S.products?.[k] || prod;
-      ingredientCap = computeCap();
-    }
-
-    const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, ingredientCap || 0));
-    if (made > 0) {
-      FK.consumeFor(rid, made);
-      const baseQ = 0.86
-        + (S.upgrades?.ovenPlus ? 0.02 : 0)
-        + (S.upgrades?.timerAuto ? 0.02 : 0)
-        + (S.boost?.qBonus || 0);
-      const noise = (Math.random() * 0.06) - 0.03;
-      addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
-    }
-  }
-
-  const Nday = trafficN();
-  const lambdaMin = Nday / DAY_MINUTES;
-  const arrivals = (Math.random() < lambdaMin ? 1 : 0)
-    + (Math.random() < lambdaMin ? 1 : 0)
-    + (Math.random() < lambdaMin ? 1 : 0);
-
-  const baseMu = (FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier || 1)
-    : ((S.capacity?.cashierMu || 1.5) + (S.upgrades?.posRapid ? 0.8 : 0) + Math.max(0, (S.staff?.cashier || 1) - 1) * 0.5));
-  const sw = seasonWeather();
-  const evm = eventMods();
-  let W = waitW(arrivals, baseMu) + (S.boost?.wBonus || 0) + (sw.wait || 0) + (evm.wait || 0);
-  W = Math.max(0, W);
-
-  const P0 = prod.P0 || 10;
-  let P = prod.price || P0;
-  const hh = prod.happyHour || { enabled:false, start:'16:00', end:'17:00', discount:0.10 };
-  const HHs = toMinutes(hh.start);
-  const HHe = toMinutes(hh.end);
-  if (hh.enabled && S.timeMin >= HHs && S.timeMin < HHe) {
-    P = P * (1 - clamp(hh.discount || 0.10, 0.05, 0.25));
-  }
-
-  const Q = Math.max(0, Math.min(1, avgQuality() + (S.boost?.qBonus || 0) + (sw.qBonus || 0) + (evm.qBonus || 0)));
-  const C = clamp(conversionC(P, P0, Q, W) + (evm.conv || 0), 0, 0.95);
-
-  const demandMin = Math.max(0, Math.round(arrivals * C));
-  const { sold } = consumeInventory(Math.min(totalStock(), demandMin));
-  const rev = sold * P;
-  const unitCost = (prod.cost?.ingredients || 3) + (prod.cost?.laborVar || 0.5);
-  const cogs = sold * unitCost;
-
-  const A = S.autosim.aggregates || (S.autosim.aggregates = defaultAggregates());
-  A.sold += sold;
-  A.rev += rev;
-  A.cogs += cogs;
-  A.N = Nday;
-  A.steps = (A.steps || 0) + 1;
-  A.Q = ((A.Q || 0) * (A.steps - 1) + Q) / A.steps;
-  A.W = ((A.W || 0) * (A.steps - 1) + W) / A.steps;
-  A.C = ((A.C || 0) * (A.steps - 1) + C) / A.steps;
-
-  S.cash = (S.cash || 0) + rev;
-
-  FK.tickBuffs(1);
-
-  FK.setState(S);
-  refreshTop();
-  setMetrics({
-    N: Nday,
-    C: A.C,
-    W: A.W,
-    Q: A.Q,
-    sold: A.sold,
-    rev: A.rev,
-    profit: (A.rev - A.cogs)
-  });
-
-  if (S.timeMin >= dayStart + DAY_MINUTES) {
-    endOfDay();
-  }
-}
-
-
-// ---------- End of Day ----------
-function endOfDay(){
-  S = FK.getState();
-  const key   = (FK.getActiveProductKey && FK.getActiveProductKey()) || (S.activeProduct || 'croissant');
-  const prod  = S.products?.[key];
-  const A     = S.autosim.aggregates || defaultAggregates();
-
-  const stockLeft   = totalStock();
-  const holding     = stockLeft * 0.10;
-  const marketingCost = (S.marketing.socialToday ? 150 : 0) + ((S.marketing.flyerDaysLeft || 0) > 0 ? 80 : 0);
-
-  const served = Math.max(1, Math.round((A.N || 0) * (A.C || 0)));
-  const complaints = Math.max(0, (A.N || 0) > 0 ? (1 - (A.sold || 0) / Math.max(1, served)) : 0);
-  const payroll = FK.staffDailyTick ? FK.staffDailyTick({ avgW: A.W || 0, complaints }) : (FK.teamSummary()?.payroll || 0);
-
-  const fixed  = 150;
-  const profit = (A.rev || 0) - (A.cogs || 0) - holding - marketingCost - fixed - payroll;
+  runtime.kidMode = !!S?.modes?.kidMode;
+  runtime.focus = S?.policy?.focus || 'balanced';
 
   try {
-    const life = prod?.shelfLifeDays || 2;
-    if (prod?.stock) {
-      prod.stock.forEach(l => l.age = (l.age || 0) + 1);
-      prod.stock = prod.stock.filter(l => (l.age || 0) < life);
-    }
-    ['milk','strawberries'].forEach(id => {
-      const item = S.ingredients?.[id];
-      if (item && item.qty > 0) { item.qty = Math.max(0, item.qty - Math.ceil(item.qty * 0.20)); }
-    });
+    await FK.loadConfigs();
   } catch (_) {}
+  runtime.configs = FK.getConfigs();
+  await autoManager.init();
 
-  const rho = ECON.rho;
-  const qualityFactor = Math.max(0.80, Math.min(1.20, 0.9 + 0.25 * ((A.Q || 0) - 0.85) - 0.05 * complaints));
-  S.reputation = Math.max(0.80, Math.min(1.20, rho * (S.reputation || 1) + (1 - rho) * qualityFactor));
-
-  const summary = {
-    sold: A.sold || 0,
-    rev: A.rev || 0,
-    cogs: A.cogs || 0,
-    profit,
-    Q: A.Q || 0,
-    W: A.W || 0,
-    C: A.C || 0
-  };
-
-  S.today = {
-    report: {
-      sold: summary.sold,
-      revenue: summary.rev,
-      cogs: summary.cogs,
-      holding,
-      marketing: marketingCost,
-      fixed,
-      payroll,
-      profit: summary.profit,
-      Q: summary.Q,
-      W: summary.W,
-      C: summary.C
-    }
-  };
-
-  if ((S.marketing.flyerDaysLeft || 0) > 0) S.marketing.flyerDaysLeft--;
-  S.marketing.socialToday = false;
-
-  S.autosim.aggregates = defaultAggregates();
-
-  S.day = (S.day || 1) + 1;
-  S.timeMin = S.world?.open || 8*60;
-  S.world = S.world || { year:1, season:'primavara', day:S.day, minute:S.timeMin, open:8*60, close:8*60 + DAY_MINUTES };
-  S.world.day = (S.world.day || 1) + 1;
-  if (S.world.day > 28) {
-    S.world.day = 1;
-    S.world.season = (S.world.season === 'primavara' ? 'vara'
-      : S.world.season === 'vara' ? 'toamna'
-      : S.world.season === 'toamna' ? 'iarna'
-      : 'primavara');
-  }
-  S.world.minute = S.world.open;
-  try { FK.rollWeather && FK.rollWeather(S.world.season); } catch (_) {}
-  try { FK.questEndOfDay && FK.questEndOfDay(summary); } catch (_) {}
-
-  FK.setState(S);
-  refreshTop();
-}
-
-// ---------- Control rulare ----------
-function setPaused(paused){
-  S = FK.getState();
-  S.autosim = S.autosim || { running:false, speed:1, tickMsBase:200, aggregates: defaultAggregates() };
-  S.autosim.aggregates = S.autosim.aggregates || defaultAggregates();
-  S.autosim.running = !paused;
-  btnPause.textContent = paused ? 'Reia' : 'Pauza';
-  $$('#left-controls input, #left-controls select, #left-controls button').forEach(el => { el.disabled = !paused && el.id !== 'btn-rnd'; });
-  updateTicker(paused ? 'Simulare in pauza' : 'Simulare activa');
-  FK.setState(S);
-  if (!paused) {
-    try { ensureAutoSupplies(true); } catch (_) { }
-  }
-}
-function setSpeed(mult){
-  S = FK.getState();
-  S.autosim = S.autosim || {};
-  S.autosim.speed = mult;
-  speedBtns.forEach(b => b.classList.toggle('active', Number(b.dataset.speed) === mult));
-  FK.setState(S);
-}
-function loopStart(){
-  if(window.__tick){ clearInterval(window.__tick); }
-  const tick = ()=>{ for(let i=0;i<(FK.getState().autosim?.speed||1); i++) stepAuto(); };
-  window.__tick = setInterval(tick, FK.getState().autosim?.tickMsBase || 200);
-}
-  const tick = ()=>{ for(let i=0;i<(FK.getState().autosim?.speed||1); i++) stepAuto(); };
-  window.__tick = setInterval(tick, FK.getState().autosim?.tickMsBase || 200);
-}
-
-// ---------- Hidrate & Apply controls ----------
-function hydrateControls(){
-  S = FK.getState();
-  const p = S.products[activeKey()];
-  if(!p) return;
-  $('#inp-price').value = p.price;
-  $('#rng-price').value = p.price;
-  $('#inp-lot').value   = p.plannedQty;
-  $('#inp-hh-start').value = p.happyHour?.start || '16:00';
-  $('#inp-hh-end').value   = p.happyHour?.end   || '17:00';
-  $('#inp-hh-disc').value  = Math.round((p.happyHour?.discount||0.10)*100);
-
-  $('#chk-flyer').checked  = (S.marketing.flyerDaysLeft||0)>0;
-  $('#chk-social').checked = !!S.marketing.socialToday;
-  $('#sel-cashiers').value = String(S.staff?.cashier||1);
-
-  $('#up-oven').checked = !!S.upgrades?.ovenPlus;
-  $('#up-pos').checked  = !!S.upgrades?.posRapid;
-  $('#up-auto').checked = !!S.upgrades?.timerAuto;
-}
-function applyControlsToState(){
-  S = FK.getState();
-  const p = S.products[activeKey()];
-  if(!p) return;
-
-  p.price = clamp(parseFloat(inpPrice.value)||p.P0, p.P0*0.7, p.P0*1.3);
-  p.plannedQty = Math.max(0, Math.round(parseFloat(inpLot.value)||0));
-  p.happyHour = p.happyHour || {};
-  p.happyHour.start = inpHHs.value || '16:00';
-  p.happyHour.end   = inpHHe.value || '17:00';
-  p.happyHour.discount = clamp((parseFloat(inpHHd.value)||10)/100, 0.05, 0.25);
-  p.happyHour.enabled  = true;
-
-  S.marketing.socialToday = !!chkSocial.checked;
-  if(chkFlyer.checked && (S.marketing.flyerDaysLeft||0)<=0){
-    S.marketing.flyerDaysLeft = 2;
-    if((S.cash||0)>=80){ S.cash -= 80; }
-  }
-
-  S.staff.cashier = parseInt(selCashiers.value,10)||1;
-
-  S.upgrades.ovenPlus  = !!upOven.checked;
-  S.upgrades.posRapid  = !!upPos.checked;
-  S.upgrades.timerAuto = !!upAuto.checked;
-
-  FK.setState(S);
-  refreshTop();
-}
-
-// ---------- Mount principal ----------
-function mount(){
-  refreshTop();
-  hydrateControls();
-
-  if(banCorner){ try{ banCorner.innerHTML=''; banCorner.appendChild(buildBanisorSprite(120)); }catch(_){ } }
-  if(ticker) ticker.textContent='Auto-sim '+(FK.getState().autosim?.running? 'activ' : 'în pauză');
-
-  // UI adițională
-  try{ mountSeasonCard(); }catch(_){}
-  try{ mountEventsCard(); }catch(_){}
-  try{ mountQuestsCard(); }catch(_){}
-  try{ mountSaveSlots(); }catch(_){}
-  try{ mountProductSelector(); }catch(_){}
-  try{ mountBuyBtn(); }catch(_){}
-}
-
-// ---------- Evenimente UI ----------
-function updateTickerBadge(){
-  try{
-    const t=document.getElementById('ticker'); if(!t) return;
-    const S=FK.getState();
-    const evs = FK.todayEvents ? FK.todayEvents() : [];
-    const evTxt = evs.length? ` · 🎪 ${evs.map(e=>e.label||e.id).join(' + ')}` : '';
-    const label = 'Manager '+(S.autosim?.running? 'activ…' : 'în pauză');
-    t.textContent = `${label}${evTxt}`;
-  }catch(_){}
-}
-
-// ---------- Buffs popover ----------
-function openBuffsPopover(){
-  try{
-    const old=document.getElementById('buffs-popover'); if(old) { old.remove(); return; }
-    const pop=document.createElement('div'); pop.id='buffs-popover';
-    Object.assign(pop.style,{position:'fixed',top:'48px',right:'12px',background:'#fff',color:'#000',border:'1px solid #333',borderRadius:'8px',padding:'.5rem .7rem',zIndex:'99999',boxShadow:'0 4px 16px rgba(0,0,0,.2)'});
-    const buffs=(FK.getState().boost?.buffs)||[];
-    if(buffs.length===0){ pop.textContent='Niciun boost activ'; }
-    else{
-      const ul=document.createElement('ul'); ul.style.listStyle='none'; ul.style.margin='0'; ul.style.padding='0';
-      buffs.forEach(b=>{
-        const li=document.createElement('li'); li.style.display='flex'; li.style.justifyContent='space-between'; li.style.gap='.5rem'; li.style.minWidth='220px'; li.style.padding='.15rem 0';
-        const mins=Math.max(0, Math.ceil(b.minutesLeft||0));
-        li.innerHTML=`<span>${b.label||b.id}</span><b>${mins}m</b>`;
-        ul.appendChild(li);
-      });
-      pop.appendChild(ul);
-    }
-    document.body.appendChild(pop);
-    const close=(ev)=>{ if(!pop.contains(ev.target) && ev.target!==elBoost){ pop.remove(); window.removeEventListener('mousedown', close); } };
-    window.addEventListener('mousedown', close);
-  }catch(_){}
-}
-try{ if(elBoost) elBoost.addEventListener('click', openBuffsPopover); }catch(_){}
-
-// ---------- Banisor sprite mic ----------
-function buildBanisorSprite(sizePx=120){
-  const fragment = document.createDocumentFragment();
-  const body = document.createElement('div');
-  body.className = 'ban-body';
-  body.style.width = `${sizePx}px`;
-  body.style.height = `${sizePx}px`;
-
-  const ring = document.createElement('div');
-  ring.className = 'ban-ring';
-  body.appendChild(ring);
-
-  const highlight = document.createElement('span');
-  highlight.className = 'ban-highlight';
-  body.appendChild(highlight);
-
-  const eyeLeft = document.createElement('span');
-  eyeLeft.className = 'ban-eye ban-eye-left';
-  body.appendChild(eyeLeft);
-
-  const eyeRight = document.createElement('span');
-  eyeRight.className = 'ban-eye ban-eye-right';
-  body.appendChild(eyeRight);
-
-  const browLeft = document.createElement('span');
-  browLeft.className = 'ban-brow ban-brow-left';
-  body.appendChild(browLeft);
-
-  const browRight = document.createElement('span');
-  browRight.className = 'ban-brow ban-brow-right';
-  body.appendChild(browRight);
-
-  const mouth = document.createElement('span');
-  mouth.className = 'ban-mouth';
-  body.appendChild(mouth);
-
-  const cheekLeft = document.createElement('span');
-  cheekLeft.className = 'ban-cheek ban-cheek-left';
-  body.appendChild(cheekLeft);
-
-  const cheekRight = document.createElement('span');
-  cheekRight.className = 'ban-cheek ban-cheek-right';
-  body.appendChild(cheekRight);
-
-  const sparkleLeft = document.createElement('span');
-  sparkleLeft.className = 'ban-sparkle ban-sparkle-left';
-  body.appendChild(sparkleLeft);
-
-  const sparkleRight = document.createElement('span');
-  sparkleRight.className = 'ban-sparkle ban-sparkle-right';
-  body.appendChild(sparkleRight);
-
-  const sparkleTop = document.createElement('span');
-  sparkleTop.className = 'ban-sparkle ban-sparkle-top';
-  body.appendChild(sparkleTop);
-
-  fragment.appendChild(body);
-
-  const shadow = document.createElement('div');
-  shadow.className = 'ban-shadow';
-  shadow.style.width = Math.round(sizePx * 0.75) + 'px';
-  shadow.style.height = Math.round(sizePx * 0.12) + 'px';
-  fragment.appendChild(shadow);
-
-  return fragment;
-}
-
-// ---------- Save Slots UI ----------
-// ---------- Save Slots UI ----------
-function mountSaveSlots(){
-  const host=document.querySelector('#topbar .right'); if(!host) return;
-  if(document.getElementById('btn-saves')) return;
-  const sep=document.createElement('span'); sep.className='sep'; sep.textContent='•';
-  const btn=document.createElement('button'); btn.id='btn-saves'; btn.className='btn'; btn.textContent='💽 Save';
-  host.insertBefore(sep, host.lastElementChild);
-  host.insertBefore(btn, host.lastElementChild);
-  btn.addEventListener('click', openSavesModal);
-}
-function openSavesModal(){
-  const modal=document.createElement('div'); modal.id='saves-modal';
-  Object.assign(modal.style,{position:'fixed',inset:'0',background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'99999'});
-  modal.innerHTML=`
-    <div style="background:#fff;color:#000;min-width:360px;max-width:640px;width:92%;border-radius:10px;border:2px solid #333;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:#222;color:#fff">
-        <div>💽 Save slots</div>
-        <button id="sv-close" class="btn small">✕</button>
-      </div>
-      <div id="sv-body" style="padding:.6rem .8rem;max-height:60vh;overflow:auto"></div>
-      <div style="display:flex;gap:.5rem;align-items:center;justify-content:flex-end;padding:.6rem .8rem;border-top:1px solid #ddd">
-        <button id="sv-refresh" class="btn secondary">🔄 Refresh</button>
-      </div>
-      <input id="sv-file" type="file" accept="application/json" style="display:none">
-    </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector('#sv-close').addEventListener('click', ()=>modal.remove());
-  modal.querySelector('#sv-refresh').addEventListener('click', renderList);
-  const file=modal.querySelector('#sv-file');
-  function renderList(){
-    const body=modal.querySelector('#sv-body'); body.innerHTML='';
-    const list=(FK.listSlots && FK.listSlots()) || [];
-    const active = FK.getActiveSlot ? FK.getActiveSlot() : 'autosave';
-    list.forEach(info=>{
-      const when = info.when ? new Date(info.when).toLocaleString() : '—';
-      const row=document.createElement('div'); row.style.cssText='display:grid;grid-template-columns:70px 1fr auto;gap:.5rem;align-items:center;border-bottom:1px solid #eee;padding:.35rem 0';
-      row.innerHTML = `
-        <div><b>${info.slot}${info.slot===active?'*':''}</b><div class="small muted">${when}</div></div>
-        <div class="small">Zi: <b>${info.day||'-'}</b> · Sezon: <b>${info.season||'-'}</b> · Cash: <b>${info.cash||0}</b></div>
-        <div style="display:flex;gap:.35rem;justify-content:flex-end">
-          <button class="btn small act-use">Use</button>
-          <button class="btn small act-save">Save→${info.slot}</button>
-          <button class="btn small act-exp">Export</button>
-          <button class="btn small act-imp">Import</button>
-          <button class="btn small act-del">Delete</button>
-        </div>`;
-      // actions
-      row.querySelector('.act-use').addEventListener('click', ()=>{
-        FK.setActiveSlot && FK.setActiveSlot(info.slot);
-        S=FK.getState(); refreshTop(); renderList();
-      });
-      row.querySelector('.act-save').addEventListener('click', ()=>{
-        FK.saveToSlot && FK.saveToSlot(info.slot);
-        renderList();
-      });
-      row.querySelector('.act-exp').addEventListener('click', ()=>{
-        FK.exportJSON && FK.exportJSON(info.slot);
-      });
-      row.querySelector('.act-imp').addEventListener('click', ()=>{
-        file.onchange = async ()=>{
-          const f=file.files?.[0]; if(!f) return;
-          await (FK.importJSON && FK.importJSON(f, info.slot));
-          file.value=''; renderList(); S=FK.getState(); refreshTop();
-        };
-        file.click();
-      });
-      row.querySelector('.act-del').addEventListener('click', ()=>{
-        const ok = confirm(`Ștergi slotul ${info.slot}?`);
-        if(ok){ FK.deleteSlot && FK.deleteSlot(info.slot); renderList(); S=FK.getState(); refreshTop(); }
-      });
-      body.appendChild(row);
-    });
-  }
-  renderList();
-}
-
-// ---------- Ingrediente UI ----------
-function mountBuyBtn(){
-  const topRight = document.querySelector('#topbar .right'); if(!topRight) return;
-  if(document.getElementById('btn-buy')) return;
-  const sep=document.createElement('span'); sep.className='sep'; sep.textContent='·';
-  const btn=document.createElement('button'); btn.id='btn-buy'; btn.className='btn'; btn.textContent='🛒 Ingrediente';
-  topRight.insertBefore(sep, topRight.lastElementChild);
-  topRight.insertBefore(btn, topRight.lastElementChild);
-  btn.addEventListener('click', openIngModal);
-}
-function openIngModal(){
-  const modal = document.createElement('div'); modal.id='ing-modal';
-  Object.assign(modal.style,{position:'fixed',inset:'0',background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'99999'});
-  modal.innerHTML = `
-    <div style="background:#fff; color:#000; min-width:320px; max-width:560px; width:90%; border-radius:10px; border:2px solid #333; overflow:hidden;">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:.6rem .8rem; background:#222; color:#fff;">
-        <div>🛒 Cumpără ingrediente</div>
-        <button id="ing-close" class="btn small">✕</button>
-      </div>
-      <div id="ing-list" style="padding:.6rem .8rem; max-height:50vh; overflow:auto;"></div>
-      <div style="display:flex; gap:.5rem; align-items:center; justify-content:flex-end; padding:.6rem .8rem; border-top:1px solid #ddd;">
-        <div>Total: <b id="ing-total">0</b> lei</div>
-        <button id="ing-buy" class="btn">Cumpără</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  const close=()=>{ modal.remove(); };
-  modal.querySelector('#ing-close').addEventListener('click', close);
-  const list = modal.querySelector('#ing-list');
-  const totalEl = modal.querySelector('#ing-total');
-  const cart = {};
-  const Sx=FK.getState();
-  const makeRow=(id)=>{
-    const name=id.replaceAll('_',' ');
-    const qty=Sx.ingredients?.[id]?.qty||0; const price=PRICE[id]||0; const ttl=Sx.ingredients?.[id]?.shelfLife||0;
-    const row=document.createElement('div'); row.style.display='grid'; row.style.gridTemplateColumns='1fr auto auto auto'; row.style.gap='.5rem'; row.style.alignItems='center'; row.style.padding='.25rem 0';
-    row.innerHTML=`<div><b>${name}</b><div class="muted small">stoc: ${qty}, TTL: ${ttl}z</div></div>
-      <div style="text-align:right;">${price} lei</div>
-      <input type="number" min="0" step="1" value="0" style="width:70px;">
-      <div style="width:80px; text-align:right;" class="row-total">0</div>`;
-    const inp=row.querySelector('input'); const rtot=row.querySelector('.row-total');
-    inp.addEventListener('input',()=>{const v=Math.max(0,Math.round(Number(inp.value)||0)); cart[id]=v; rtot.textContent=String(v*price); updateTotal();});
-    return row;
-  };
-  const updateTotal=()=>{ const sum=Object.entries(cart).reduce((s,[k,v])=> s+(PRICE[k]||0)*Math.max(0,v),0); totalEl.textContent=String(sum); };
-  Object.keys(PRICE).forEach(id=> list.appendChild(makeRow(id)));
-  modal.querySelector('#ing-buy').addEventListener('click',()=>{
-    let spent=0; Object.entries(cart).forEach(([id,qty])=>{ if(qty>0){ const ok=FK.buyIngredient(id,qty,PRICE); if(ok) spent+=(PRICE[id]||0)*qty; }});
-    if(spent>0){
-      refreshTop();
-      updateTicker(`Aprovizionare finalizata (${spent} lei)`);
-      celebrate('Stoc aprovizionat!');
-    } else {
-      updateTicker('Aprovizionare anulata');
-    }
-    close();
+  runtime.smartUI = initSmartUI({
+    onToggle: handleSmartToggle,
+    onFocusChange: handleFocusChange,
+    onBoostClick: triggerHappyBoost
   });
+  runtime.smartUI.setSmart(S?.modes?.smartManager !== false);
+  runtime.smartUI.updatePlan({ focus: runtime.focus });
+  document.body.classList.toggle('smart-manager-on', S?.modes?.smartManager !== false);
+
+  mountProductSelector();
+  cacheMascot();
+  hydrateAdvancedControls();
+  handleOfflineCatchUp();
+  bindUI();
+  startNewDay(true);
+  startLoop();
 }
 
-// ---------- Sezon & Meteo Card ----------
-function mountSeasonCard(){
-  try{
-    const host = document.getElementById('right-metrics'); if(!host) return;
-    if(document.getElementById('card-season')) return;
-    const card=document.createElement('div'); card.id='card-season'; card.className='panel soft';
-    card.innerHTML=`<h3 style="margin-top:0">Sezon & Meteo</h3><div id="season-line" class="small"></div>`;
-    host.prepend(card);
-    const t = document.getElementById('season-line');
-    const refresh=()=>{
-      const S=FK.getState(); const sw=seasonWeather();
-      const team= FK.teamSummary ? FK.teamSummary() : {avgMood:0.75};
-      const w = S.economy2?.weather;
-      t.textContent = `${S.world?.season||'primavara'} ziua ${S.world?.day||1} · ${sw.label} · 👥 mood ${Math.round((team.avgMood||0.75)*100)}% · meteo=${w||'-'}`;
-    };
-    refresh();
-    setInterval(refresh, 2000);
-  }catch(_){}
+document.addEventListener('DOMContentLoaded', bootstrap);
+
+function cacheMascot() {
+  if (!banCorner) return;
+  try {
+    banCorner.innerHTML = '';
+    const fragment = document.createElement('div');
+    fragment.className = 'ban-body';
+    ['ban-ring', 'ban-highlight', 'ban-eye ban-eye-left', 'ban-eye ban-eye-right', 'ban-brow ban-brow-left', 'ban-brow ban-brow-right', 'ban-mouth', 'ban-cheek ban-cheek-left', 'ban-cheek ban-cheek-right', 'ban-sparkle ban-sparkle-left', 'ban-sparkle ban-sparkle-right', 'ban-sparkle ban-sparkle-top'].forEach((cls) => {
+      const span = document.createElement('span');
+      span.className = cls;
+      fragment.appendChild(span);
+    });
+    banCorner.appendChild(fragment);
+    const shadow = document.createElement('div');
+    shadow.className = 'ban-shadow';
+    banCorner.appendChild(shadow);
+  } catch (_) {}
 }
 
-// ---------- Evenimente Card ----------
-function mountEventsCard(){
-  try{
-    const host=document.getElementById('right-metrics');
-    if(!host || document.getElementById('card-events')) return;
-    const card=document.createElement('div'); card.id='card-events'; card.className='panel soft';
-    card.innerHTML=`<h3 style="margin-top:0">Evenimente</h3>
-      <div id="ev-today" class="small muted">azi: —</div>
-      <div id="ev-upcoming" class="small" style="margin-top:.35rem"></div>`;
-    host.appendChild(card);
-    const refresh=()=>{
-      const evs = (FK.todayEvents&&FK.todayEvents())||[];
-      const wrap=document.getElementById('ev-today');
-      if(evs.length===0){ wrap.textContent='azi: —'; }
-      else{
-        wrap.innerHTML = 'azi: ' + evs.map(e=>{
-          const joinBtn = (e.type==='festival')? ` <button class="btn small ev-join" data-id="${e.id}">Participă (${e.cost||0})</button>` : '';
-          return `<b>${e.label||e.id}</b>${joinBtn}`;
-        }).join(' · ');
-      }
-      const up=(FK.listUpcomingEvents&&FK.listUpcomingEvents(7))||[];
-      const box=document.getElementById('ev-upcoming');
-      box.innerHTML = up.length? ('urmează: ' + up.map(x=> `${x.season.slice(0,3)}-${x.day}: ${x.label||x.id}`).join(' · ')) : '—';
-      // bind joins
-      document.querySelectorAll('.ev-join').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const joined = FK.joinTodayFestival && FK.joinTodayFestival(btn.dataset.id);
-          if (joined) {
-            refreshTop();
-            try{ updateTickerBadge && updateTickerBadge(); }catch(_){}
-            refresh();
-            updateTicker('Festival activ');
-            celebrate('Festival activ!');
-          } else {
-            updateTicker('Nu sunt fonduri pentru festival');
-          }
-        });
-      });
-    };
-    refresh();
-    setInterval(refresh, 2000);
-  }catch(_){}
+function bindUI() {
+  btnPause?.addEventListener('click', () => {
+    const running = FK.getState().autosim?.running;
+    setPaused(running);
+    if (!running) applyControlsToState();
+  });
+  speedBtns.forEach((btn) => btn.addEventListener('click', () => setSpeed(Number(btn.dataset.speed || 1))));
+  document.getElementById('btn-import-manual')?.addEventListener('click', () => importFromManual(true));
+  rngPrice?.addEventListener('input', () => { if (inpPrice) inpPrice.value = rngPrice.value; });
+  inpPrice?.addEventListener('input', () => { if (rngPrice) rngPrice.value = inpPrice.value; });
 }
 
-// ---------- Quests Card ----------
-function mountQuestsCard(){
-  try{
-    const host = document.getElementById('right-metrics');
-    if(!host || document.getElementById('card-quests')) return;
-    const card = document.createElement('div'); card.id = 'card-quests'; card.className = 'panel soft';
-    card.innerHTML = `<h3 style="margin-top:0">Quests azi</h3><div id="q-list" class="small"></div>`;
-    host.appendChild(card);
-    const bar = (value, target, inverted = false) => {
-      if (target <= 0) target = 1;
-      const ratio = inverted ? (value <= target ? 1 : Math.max(0, target / Math.max(1, value))) : Math.min(1, value / target);
-      const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
-      return `<div class="bar" style="height:8px"><span style="display:block;height:8px;width:${pct}%;background:#69c56f"></span></div>`;
-    };
-    const render = () => {
-      try { FK.ensureDailyQuests && FK.ensureDailyQuests(); } catch (_) {}
-      const quests = (FK.getQuests && FK.getQuests().daily) || [];
-      const box = document.getElementById('q-list');
-      if (!box) return;
-      box.innerHTML = quests.map(q => {
-        const ready = q.status === 'ready';
-        let progressText = '';
-        let meter = '';
-        if (q.type === 'sold') { progressText = `${q.progress || 0}/${q.target}`; meter = bar(q.progress || 0, q.target); }
-        else if (q.type === 'qavg') { progressText = `${Number(q.progress || 0).toFixed(2)} >= ${q.target}`; meter = bar(q.progress || 0, q.target); }
-        else if (q.type === 'wait') { progressText = `${Number(q.progress || 0).toFixed(2)} <= ${q.target}`; meter = bar(q.progress || 0, q.target, true); }
-        else if (q.type === 'revenue') { progressText = `${Math.round(q.progress || 0)} / ${q.target} lei`; meter = bar(q.progress || 0, q.target); }
-        else if (q.type === 'profit') { progressText = `${Math.round(q.progress || 0)} / ${q.target} lei`; meter = bar(q.progress || 0, q.target); }
-        const reward = q.reward?.cash ? `+${q.reward.cash} lei` : (q.reward?.buff ? (q.reward.buff.label || 'Bonus') : '');
-        const button = ready ? `<button class="btn small q-claim" data-id="${q.id}">Revendica</button>` : '';
-        return `<div style="display:grid;grid-template-columns:1fr auto;gap:.4rem;align-items:center;margin:.25rem 0">
-          <div><b>${q.label}</b><div class="small muted">${progressText} | reward: ${reward}</div>${meter}</div>
-          <div>${button}</div>
+function handleSmartToggle(enabled) {
+  FK.setState({ modes: { ...(FK.getState().modes || {}), smartManager: enabled } });
+  document.body.classList.toggle('smart-manager-on', enabled);
+  updateTicker(enabled ? 'Smart Manager activ — relaxează-te!' : 'Smart Manager dezactivat. Controlezi tu!');
+}
+
+function handleFocusChange(focus) {
+  runtime.focus = focus;
+  FK.setPolicy({ focus });
+  updateTicker(`Focus: ${focus === 'happy' ? 'Clienți fericiți' : focus === 'profit' ? 'Profit' : 'Echilibru'}`);
+  if (dayPlan) dayPlan.focus = focus;
+}
+
+function triggerHappyBoost() {
+  FK.addBuff({ id: 'happyDay', label: 'Zi bună', minutes: 480, trafficMult: 1.08, qBonus: 0.02 });
+  updateTicker('Boost Zi bună activ! ✨');
+  celebrate('Zi bună activată!');
+}
+
+function hydrateAdvancedControls() {
+  try {
+    const product = S.products?.[S.activeProduct || 'croissant'];
+    if (inpPrice && product?.price) inpPrice.value = product.price;
+    if (rngPrice && product?.price) rngPrice.value = product.price;
+    if (inpLot && product?.plannedQty) inpLot.value = product.plannedQty;
+    if (selCashiers) selCashiers.value = String(S.staff?.cashier || 1);
+    if (chkFlyer) chkFlyer.checked = !!S.marketing?.flyerDaysLeft;
+    if (chkSocial) chkSocial.checked = !!S.marketing?.socialToday;
+    if (inpHHs) inpHHs.value = product?.happyHour?.start || '16:00';
+    if (inpHHe) inpHHe.value = product?.happyHour?.end || '17:00';
+    if (inpHHd) inpHHd.value = Math.round((product?.happyHour?.discount || 0.1) * 100);
+    upOven && (upOven.checked = !!S.upgrades?.ovenPlus);
+    upPos && (upPos.checked = !!S.upgrades?.posRapid);
+    upAuto && (upAuto.checked = !!S.upgrades?.timerAuto);
+  } catch (_) {}
+}
+
+function applyControlsToState() {
+  const key = S.activeProduct || 'croissant';
+  const products = { ...S.products };
+  const product = { ...products[key] };
+  if (inpPrice) product.price = clamp(Number(inpPrice.value) || product.price || 10, 1, 200);
+  if (inpLot) product.plannedQty = Math.max(10, Math.round(Number(inpLot.value) || product.plannedQty || 80));
+  product.happyHour = product.happyHour || { start: '16:00', end: '17:00', discount: 0.1 };
+  if (inpHHs) product.happyHour.start = inpHHs.value || product.happyHour.start;
+  if (inpHHe) product.happyHour.end = inpHHe.value || product.happyHour.end;
+  if (inpHHd) product.happyHour.discount = clamp((Number(inpHHd.value) || 10) / 100, 0.05, 0.25);
+  products[key] = product;
+  const staff = Object.assign({}, S.staff || {}, { cashier: selCashiers ? Math.max(1, Math.min(3, Number(selCashiers.value) || S.staff?.cashier || 1)) : (S.staff?.cashier || 1) });
+  FK.setState({ products, staff });
+  S = FK.getState();
+}
+
+function handleOfflineCatchUp() {
+  const beforeCash = S.cash || 0;
+  FK.fastForwardFromLastSeen();
+  FK.markOfflineSeen(Date.now());
+  S = FK.getState();
+  const report = S.today?.report;
+  const list = [];
+  if (report) {
+    list.push(`Am vândut ${report.sold || 0} prăjituri.`);
+    list.push(`Venituri: ${Math.round(report.revenue || 0)} lei.`);
+    list.push(`Calitate medie: ${(report.Q || 0).toFixed(2)}.`);
+  } else if ((S.cash || 0) > beforeCash) {
+    list.push(`Am câștigat ${Math.round((S.cash || 0) - beforeCash)} lei în timp ce ai lipsit.`);
+  }
+  if (list.length) runtime.smartUI.showOfflineSummary(list);
+}
+
+function startLoop() {
+  if (runtime.timer) clearInterval(runtime.timer);
+  runtime.timer = setInterval(stepMinute, LOOP_MS);
+}
+
+function createEmptySummary(state) {
+  return {
+    plan: 0,
+    produced: 0,
+    sold: 0,
+    revenue: 0,
+    cogs: 0,
+    profit: 0,
+    minute: 0,
+    restockSpent: 0,
+    qualitySum: 0,
+    qualitySamples: 0,
+    avgPrice: 0,
+    stockStart: FK.totalStock(state.activeProduct || 'croissant'),
+    stockEnd: 0,
+    cashStart: state.cash || 0,
+    cashEnd: state.cash || 0,
+    usedVoucher: false,
+    messages: []
+  };
+}
+
+function startNewDay(resetMinute) {
+  S = FK.getState();
+  runtime.kidMode = !!S?.modes?.kidMode;
+  runtime.focus = S?.policy?.focus || runtime.focus;
+  if (resetMinute) {
+    const open = S.world?.open || 8 * 60;
+    FK.setState({ timeMin: open, world: { ...(S.world || {}), minute: open } });
+    S = FK.getState();
+  }
+  summary = createEmptySummary(S);
+  middayTriggered = false;
+
+  const instructions = autoManager.onDayStart(S);
+  applyDayStartInstructions(instructions);
+  dayPlan = autoManager.getCurrentPlan();
+  runtime.diff = dayPlan?.diff || autoManager.difficultyProfile(S);
+  if (dayPlan) {
+    summary.plan = dayPlan.plannedQty;
+    summary.avgPrice = dayPlan.nextPrice;
+  } else {
+    const product = S.products?.[S.activeProduct || 'croissant'];
+    summary.plan = product?.plannedQty || 80;
+    summary.avgPrice = product?.price || 10;
+  }
+
+  runtime.smartUI.updatePlan({ plannedQty: summary.plan, price: summary.avgPrice, cashiers: S.staff?.cashier || 1, focus: runtime.focus });
+  runtime.smartUI.updateGoals(S.goals || {}, { sold: 0 });
+
+  const eventDecision = autoManager.onEventToday(S) || {};
+  if (eventDecision.joinFestival) {
+    try {
+      (FK.todayEvents?.() || []).filter((ev) => ev.type === 'festival').forEach((ev) => FK.joinTodayFestival && FK.joinTodayFestival(ev.id));
+      updateTicker('Astazi participam la festival!');
+    } catch (_) {}
+  }
+  if (eventDecision.triggerBoost) {
+    FK.addBuff({ id: 'eventBoost', label: 'Zi speciala', minutes: 240, trafficMult: 1.05, qBonus: 0.01 });
+  }
+
+  refreshTop();
+}
+
+function applyDayStartInstructions(instr) {
+  if (!instr) return;
+  const key = instr.productKey || S.activeProduct || 'croissant';
+  const products = { ...S.products };
+  const product = { ...products[key] };
+  if (instr.plannedQty !== undefined) product.plannedQty = Math.max(10, Math.round(instr.plannedQty));
+  if (instr.price !== undefined) product.price = clamp(instr.price, 1, 200);
+  if (instr.happyHour) product.happyHour = Object.assign({}, product.happyHour || {}, instr.happyHour, { enabled: !!instr.happyHour.enabled });
+  products[key] = product;
+  const patch = { products };
+  if (instr.cashiers !== undefined) patch.staff = Object.assign({}, S.staff || {}, { cashier: Math.max(1, Math.min(3, Math.round(instr.cashiers))) });
+  FK.setState(patch);
+  S = FK.getState();
+  if (Array.isArray(instr.restock) && instr.restock.length) executeRestock(instr.restock);
+}
+
+function executeRestock(orders = []) {
+  if (!orders.length) return;
+  const priceTable = runtime.configs?.economy?.ingredients || {};
+  let spent = 0;
+  orders.forEach((order) => {
+    const qty = Math.max(0, Math.round(order.qty || 0));
+    if (!qty) return;
+    const price = order.price ?? priceTable[order.id] ?? 5;
+    const ok = FK.buyIngredient(order.id, qty, priceTable);
+    if (ok) spent += price * qty;
+  });
+  if (spent > 0) {
+    summary.restockSpent += spent;
+    updateTicker(`Aprovizionare automată (${spent} lei)`);
+  }
+  S = FK.getState();
+}
+
+function stepMinute() {
+  S = FK.getState();
+  const open = S.world?.open || 8 * 60;
+  const minuteOfDay = Math.max(0, (S.timeMin || open) - open);
+  summary.minute = minuteOfDay;
+  if (minuteOfDay >= DAY_MINUTES) {
+    endOfDay();
+    return;
+  }
+
+  const instructions = autoManager.onMinute(S, minuteOfDay, summary) || {};
+  if (Array.isArray(instructions.restock) && instructions.restock.length) executeRestock(instructions.restock);
+  if (instructions.adjustPrice !== undefined && dayPlan) setProductPrice(dayPlan.productKey, instructions.adjustPrice);
+  if (instructions.adjustCashiers !== undefined) setCashiers(instructions.adjustCashiers);
+  if (instructions.produce) produce(instructions.produce);
+
+  const sales = simulateSales(minuteOfDay);
+  runtime.smartUI.updateGoals(FK.getState().goals || {}, { sold: summary.sold });
+  updateMetrics(minuteOfDay, sales);
+
+  if (!middayTriggered && minuteOfDay >= (runtime.configs?.policies?.staffing?.middayMinute || 240)) {
+    middayTriggered = true;
+    const adjust = autoManager.onMiddayCheck(FK.getState(), summary);
+    if (adjust?.adjustPrice !== undefined && dayPlan) {
+      setProductPrice(dayPlan.productKey, adjust.adjustPrice);
+      updateTicker('Am ajustat prețul pentru restul zilei.');
+    }
+  }
+
+  const stateAfter = FK.getState();
+  const reserveRatio = stateAfter?.policy?.cashReserve || dayPlan?.diff?.cashReserve || 0.15;
+  const reserve = reserveRatio * Math.max(200, (summary.avgPrice || 10) * 20);
+  if ((stateAfter.cash || 0) < reserve) autoManager.onLowCash(stateAfter, summary);
+
+  FK.tickMinutes(1);
+  S = FK.getState();
+}
+
+function produce(requestedQty) {
+  if (!dayPlan) return 0;
+  let qty = Math.max(0, Math.round(requestedQty));
+  if (!qty) return 0;
+  const productKey = dayPlan.productKey || S.activeProduct || 'croissant';
+  const product = S.products?.[productKey];
+  if (!product) return 0;
+  const recipeId = product.recipeId || `${productKey}_plain`;
+  while (qty > 0 && !FK.canProduce(recipeId, qty)) qty -= 1;
+  if (!qty) return 0;
+  FK.consumeFor(recipeId, qty);
+  const quality = computeQuality();
+  FK.addInventory(productKey, qty, quality);
+  summary.produced += qty;
+  summary.qualitySum += quality * qty;
+  summary.qualitySamples += qty;
+  if (dayPlan) dayPlan.produced = (dayPlan.produced || 0) + qty;
+  S = FK.getState();
+  return qty;
+}
+
+function computeQuality() {
+  const base = 0.86 + (S.upgrades?.ovenPlus ? 0.02 : 0) + (S.upgrades?.timerAuto ? 0.02 : 0) + (S.boost?.qBonus || 0);
+  const noise = (Math.random() * 0.06) - 0.03;
+  return clamp(base + noise, 0.7, 0.99);
+}
+
+function simulateSales(minuteOfDay) {
+  const productKey = dayPlan?.productKey || S.activeProduct || 'croissant';
+  const product = S.products?.[productKey];
+  if (!product) return { sold: 0, demand: 0, wait: 0, conversion: 0 };
+  const diff = dayPlan?.diff || autoManager.difficultyProfile(S);
+  const price = product.price || 10;
+  const basePrice = dayPlan?.priceBounds?.base || product.P0 || 10;
+  const quality = computeAverageQuality(productKey);
+  const arrivals = sampleArrivals(minuteOfDay, diff);
+  const mu = FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier || 1) : 1.5;
+  const wait = clamp(waitW(arrivals, mu), 0, 6);
+  const conversion = clamp(conversionC(price, basePrice, quality, wait), 0, 0.98);
+  const demand = Math.max(0, Math.round(arrivals * conversion));
+  const sale = sellFromStock(productKey, demand, price, product);
+  summary.sold += sale.sold;
+  summary.revenue += sale.revenue;
+  summary.cogs += sale.cogs;
+  summary.qualitySum += sale.qWeighted;
+  summary.qualitySamples += sale.sold;
+  summary.profit = summary.revenue - summary.cogs - summary.restockSpent;
+  return { sold: sale.sold, demand, wait, conversion };
+}
+
+function sampleArrivals(minuteOfDay, diff) {
+  const expected = dayPlan?.expectedTraffic || diff.baseTraffic || 90;
+  const lambda = expected / DAY_MINUTES;
+  const pulse = minutePulse(minuteOfDay);
+  const rate = lambda * pulse;
+  let arrivals = 0;
+  for (let i = 0; i < 3; i++) arrivals += Math.random() < rate ? 1 : 0;
+  return arrivals;
+}
+
+function minutePulse(minute) {
+  if (minute < 60) return 0.6;
+  if (minute < 180) return 1.1;
+  if (minute < 300) return 1.3;
+  if (minute < 360) return 1.1;
+  return 0.8;
+}
+
+function conversionC(P, P0, Q, W) {
+  const pricing = runtime.configs?.policies?.pricing || {};
+  const C0 = pricing.C0 ?? 0.5;
+  const epsilon = pricing.epsilon ?? 1.6;
+  const alpha = pricing.alpha ?? 0.75;
+  const beta = pricing.beta ?? 0.5;
+  const priceTerm = Math.exp(-epsilon * (P / P0 - 1));
+  const qualityTerm = alpha + beta * Q;
+  const waitPenalty = 1 - Math.min(0.6, 0.1 * Math.max(0, W));
+  return clamp(C0 * priceTerm * qualityTerm * waitPenalty, 0, 0.98);
+}
+
+function waitW(arrivals, mu) {
+  if (mu <= 0) return 6;
+  const rho = Math.max(0, Math.min(1, arrivals / mu));
+  const tau = runtime.configs?.economy?.waitTau ?? 3;
+  return tau * rho;
+}
+
+function computeAverageQuality(productKey) {
+  const product = FK.getState().products?.[productKey];
+  if (!product?.stock?.length) return 0.88 + (S.boost?.qBonus || 0);
+  let sum = 0;
+  let qty = 0;
+  product.stock.forEach((lot) => {
+    sum += (lot.q || 0.88) * (lot.qty || 0);
+    qty += lot.qty || 0;
+  });
+  return qty > 0 ? sum / qty : 0.88 + (S.boost?.qBonus || 0);
+}
+
+function sellFromStock(productKey, qty, price, product) {
+  const state = FK.getState();
+  const products = { ...state.products };
+  const prod = { ...products[productKey] };
+  const stock = (prod.stock || []).map((lot) => ({ ...lot }));
+  let left = Math.max(0, Math.round(qty));
+  let sold = 0;
+  let qWeighted = 0;
+  while (left > 0 && stock.length) {
+    const lot = stock[0];
+    const take = Math.min(lot.qty || 0, left);
+    if (!take) {
+      stock.shift();
+      continue;
+    }
+    lot.qty -= take;
+    sold += take;
+    left -= take;
+    qWeighted += take * (lot.q || 0.88);
+    if (lot.qty <= 0) stock.shift();
+  }
+  prod.stock = stock.filter((lot) => lot.qty > 0);
+  products[productKey] = prod;
+  FK.setState({ products });
+  S = FK.getState();
+  const unitCost = (product?.cost?.ingredients || 3) + (product?.cost?.laborVar || 0.5);
+  return { sold, revenue: sold * price, cogs: sold * unitCost, qWeighted };
+}
+
+function updateMetrics(minuteOfDay, sales) {
+  if (!barQ) return;
+  const goals = FK.getState().goals || {};
+  const quality = summary.qualitySamples > 0 ? summary.qualitySum / summary.qualitySamples : computeAverageQuality(dayPlan?.productKey || S.activeProduct || 'croissant');
+  const conversion = sales?.conversion || 0;
+  const wait = sales?.wait || 0;
+  const soldRatio = goals.targetSold ? summary.sold / goals.targetSold : 0;
+
+  barQ.style.width = `${clamp(quality, 0, 1) * 100}%`;
+  barC.style.width = `${clamp(conversion, 0, 0.98) * 100}%`;
+  barW.style.width = runtime.kidMode ? (wait < 1.5 ? '33%' : wait < 3 ? '66%' : '100%') : `${clamp(wait / 6, 0, 1) * 100}%`;
+  barN.style.width = `${clamp(soldRatio, 0, 1) * 100}%`;
+
+  mSold.textContent = String(summary.sold);
+  mRev.textContent = `${Math.round(summary.revenue)} lei`;
+  mProf.textContent = `${Math.round(summary.profit)} lei`;
+
+  runtime.smartUI.updatePlan({ plannedQty: summary.plan, price: summary.avgPrice, cashiers: S.staff?.cashier || 1 });
+}
+
+function endOfDay() {
+  const productKey = dayPlan?.productKey || S.activeProduct || 'croissant';
+  summary.cashEnd = S.cash || 0;
+  summary.stockEnd = FK.totalStock(productKey);
+  summary.quality = summary.qualitySamples > 0 ? summary.qualitySum / summary.qualitySamples : computeAverageQuality(productKey);
+  summary.messages.push(`Stoc rămas: ${summary.stockEnd} buc.`);
+  const result = autoManager.onEndOfDay(summary, S) || {};
+  if (result.nextPrice !== undefined) setProductPrice(productKey, result.nextPrice);
+  if (result.voucherAmount) {
+    summary.usedVoucher = true;
+    summary.messages.push(`Voucher de siguranță: +${result.voucherAmount} lei.`);
+  }
+  runtime.smartUI.updateGoals(FK.getState().goals || {}, { sold: summary.sold });
+  runtime.smartUI.showEndOfDay({ sold: summary.sold, quality: summary.quality, stars: result.stars || 0, messages: summary.messages });
+  celebrate(`Ai câștigat ${result.stars || 0} stele!`);
+  applySoftExpiration(productKey);
+  startNewDay(true);
+}
+
+function applySoftExpiration(productKey) {
+  if (!runtime.kidMode) return;
+  const state = FK.getState();
+  const product = state.products?.[productKey];
+  if (!product?.stock?.length) return;
+  const updated = product.stock.map((lot) => ({ ...lot, qty: Math.max(0, Math.floor((lot.qty || 0) * 0.9)) })).filter((lot) => lot.qty > 0);
+  FK.setState({ products: { ...state.products, [productKey]: { ...product, stock: updated } } });
+  S = FK.getState();
+}
+
+function setProductPrice(productKey, price) {
+  const products = { ...FK.getState().products };
+  if (!products[productKey]) return;
+  products[productKey] = { ...products[productKey], price: clamp(price, 1, 200) };
+  FK.setState({ products });
+  S = FK.getState();
+  summary.avgPrice = products[productKey].price;
+}
+
+function setCashiers(count) {
+  FK.setState({ staff: { ...(FK.getState().staff || {}), cashier: Math.max(1, Math.min(3, Math.round(count || 1))) } });
+  S = FK.getState();
+}
+
+function setSpeed(mult) {
+  const autosim = Object.assign({}, FK.getState().autosim || { running: true, speed: 1, tickMsBase: 200 });
+  autosim.speed = mult;
+  FK.setState({ autosim });
+  speedBtns.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.speed) === mult));
+}
+
+function setPaused(paused) {
+  const autosim = Object.assign({}, FK.getState().autosim || { running: true, speed: 1, tickMsBase: 200 });
+  autosim.running = !paused;
+  FK.setState({ autosim });
+  if (!paused) {
+    startLoop();
+    updateTicker('Simulare în desfășurare.');
+  } else {
+    if (runtime.timer) clearInterval(runtime.timer);
+    updateTicker('Simulare în pauză.');
+  }
+}
+
+async function importFromManual(clearAfter = true) {
+  try {
+    const url = `game_assets/api.php?action=fetch_transfer${clearAfter ? '&clear=1' : ''}`;
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const payload = await resp.json();
+    if (!payload?.ok) { updateTicker('Import eșuat.'); return; }
+    const transfer = payload.transfer || {};
+    const qty = Math.max(0, Number(transfer.qty || 0));
+    const q = Math.max(0.7, Math.min(0.99, Number(transfer.avg_q || 0.86)));
+    const buffs = Array.isArray(transfer.buffs) ? transfer.buffs : [];
+    const key = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
+    if (qty > 0) FK.addInventory(key, qty, q);
+    buffs.forEach((b) => {
+      const minutes = Math.max(1, Math.ceil(Number(b.seconds_left || 0) / 60));
+      FK.addBuff({ id: `manual_${b.id || ('b' + Date.now())}`, label: b.label || 'Boost manual', minutes, trafficMult: Number(b.trafficMult || 1), qBonus: Number(b.qBonus || 0) });
+    });
+    S = FK.getState();
+    updateTicker(qty ? `Importat ${qty} buc • Q ${q.toFixed(2)}` : 'Boost-uri importate!');
+    celebrate('Import reușit!');
+    refreshTop();
+  } catch (err) {
+    console.error(err);
+    updateTicker('Eroare la import.');
+  }
+}
+
+function refreshTop() {
+  S = FK.getState();
+  if (elDay) elDay.textContent = String(S.world?.day || S.day || 1);
+  if (elTime) {
+    const minutes = S.timeMin || S.world?.minute || 8 * 60;
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    elTime.textContent = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  }
+  if (elCash) elCash.textContent = Math.round(S.cash || 0);
+  const key = dayPlan?.productKey || S.activeProduct || 'croissant';
+  if (elStock) elStock.textContent = FK.totalStock(key);
+  if (elRep) elRep.textContent = (S.reputation || 1).toFixed(2);
+  if (elBoost) {
+    const percent = Math.round(S.boost?.percent || 0);
+    const count = (S.boost?.buffs || []).length;
+    elBoost.textContent = count ? `${percent}% (${count})` : `${percent}%`;
+  }
+}
+
+function openIngModal() {
+  const modal = document.createElement('div');
+  modal.id = 'ing-modal';
+  Object.assign(modal.style, { position: 'fixed', inset: '0', background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '100000' });
+  modal.innerHTML = `
+    <div style="background:#fff;color:#000;min-width:340px;max-width:620px;width:92%;border-radius:12px;border:2px solid #333;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:#222;color:#fff">
+        <div>Vizualizare ingrediente</div><button id="ing-close" class="btn small">×</button>
+      </div>
+      <div style="padding:.6rem .8rem;max-height:60vh;overflow:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:.92rem">
+          <thead><tr><th align="left">Ingredient</th><th align="right">Stoc</th><th align="right">TTL</th></tr></thead>
+          <tbody id="ing-body"></tbody>
+        </table>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const body = modal.querySelector('#ing-body');
+  const render = () => {
+    const state = FK.getState();
+    body.innerHTML = '';
+    Object.entries(state.ingredients || {}).forEach(([id, info]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${id.replaceAll('_', ' ')}</td><td align="right">${info.qty || 0}</td><td align="right">${info.shelfLife || '-'} zile</td>`;
+      body.appendChild(tr);
+    });
+  };
+  render();
+  modal.querySelector('#ing-close')?.addEventListener('click', () => modal.remove());
+}
+
+function openRNDModal() {
+  const state = FK.getState();
+  const list = Object.values(state.products || {});
+  const modal = document.createElement('div');
+  modal.id = 'rnd-modal';
+  Object.assign(modal.style, { position: 'fixed', inset: '0', background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: '100000' });
+  modal.innerHTML = `
+    <div style="background:#fff;color:#000;min-width:360px;max-width:720px;width:92%;border:2px solid #333;border-radius:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:#222;color:#fff">
+        <div>Laborator R&D</div><button id="rnd-close" class="btn small">×</button>
+      </div>
+      <div style="padding:.6rem .8rem;max-height:60vh;overflow:auto">
+        <div id="rnd-list"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const container = modal.querySelector('#rnd-list');
+  const paint = () => {
+    const fresh = FK.getState();
+    container.innerHTML = '';
+    list.forEach((p) => {
+      const unlocked = !p.locked && (fresh.research?.unlocked || []).includes(p.key);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:center;border-bottom:1px solid #eee;padding:.4rem 0';
+      row.innerHTML = `
+        <div><b>${p.name}</b><div class="small muted">P0 ${p.P0} • TTL ${p.shelfLifeDays} zile</div></div>
+        <div style="display:flex;gap:.4rem">
+          ${unlocked ? `<button class="btn small act-proto" data-k="${p.key}">Taste test</button>` : `<button class="btn small act-unlock" data-k="${p.key}">Deblochează (300)</button>`}
         </div>`;
-      }).join('');
-      box.querySelectorAll('.q-claim').forEach(btn => {
-        btn.addEventListener('click', () => {
-          if (FK.claimQuest && FK.claimQuest(btn.dataset.id)) {
-            refreshTop();
-            try{ updateTickerBadge && updateTickerBadge(); }catch(_){}
-            updateTicker('Quest revendicat');
-            celebrate('Quest complet!');
-            setTimeout(render, 150);
-          }
-        });
-      });
-    };
-    render();
-    setInterval(render, 2500);
-  }catch(_){}
+      container.appendChild(row);
+    });
+    container.querySelectorAll('.act-unlock').forEach((btn) => btn.addEventListener('click', () => {
+      const ok = FK.unlockProduct && FK.unlockProduct(btn.dataset.k, 300);
+      if (ok) {
+        updateTicker('Produs nou deblocat!');
+        celebrate('Produs deblocat!');
+        paint();
+      } else {
+        updateTicker('Nu avem suficiente fonduri pentru R&D.');
+      }
+    }));
+    container.querySelectorAll('.act-proto').forEach((btn) => btn.addEventListener('click', () => {
+      const key = btn.dataset.k;
+      const current = FK.getState();
+      const rid = current.products?.[key]?.recipeId || 'croissant_plain';
+      if (!FK.canProduce(rid, 6)) {
+        updateTicker('Ingrediente insuficiente pentru prototip.');
+        return;
+      }
+      FK.consumeFor(rid, 6);
+      FK.addInventory(key, 6, clamp(0.9 + (Math.random() * 0.06 - 0.03), 0.86, 0.98));
+      FK.addBuff({ id: 'prototypeHype', label: `Hype ${current.products?.[key]?.name || ''}`, minutes: 45, trafficMult: 1.06, qBonus: 0.01 });
+      celebrate('Prototip servit!');
+      refreshTop();
+    }));
+  };
+  paint();
+  modal.querySelector('#rnd-close')?.addEventListener('click', () => modal.remove());
 }
 
-// ---------- Selector Produs + R&D ----------
-function mountProductSelector(){
-  try{
-    const left=document.getElementById('left-controls'); if(!left) return;
-    if(document.getElementById('sel-product')) return;
-    const wrap=document.createElement('div'); wrap.className='row';
-    wrap.innerHTML=`<label>Produs activ</label>
+function mountProductSelector() {
+  try {
+    const left = document.getElementById('left-controls');
+    if (!left || document.getElementById('sel-product')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'row';
+    wrap.innerHTML = <label>Produs activ</label>
       <select id="sel-product"></select>
-      <button id="btn-rnd" class="btn">🔬 R&D</button>`;
+      <button id="btn-rnd" class="btn">R&D</button>;
     left.insertBefore(wrap, left.firstElementChild);
-    const sel=wrap.querySelector('#sel-product');
-    const sync=()=>{
-      const S=FK.getState(); sel.innerHTML='';
-      Object.values(S.products||{}).forEach(p=>{
-        if(p.locked) return;
-        const opt=document.createElement('option'); opt.value=p.key; opt.textContent=p.name; if(S.activeProduct===p.key) opt.selected=true;
+    const sel = wrap.querySelector('#sel-product');
+    const sync = () => {
+      const fresh = FK.getState();
+      sel.innerHTML = '';
+      Object.values(fresh.products || {}).forEach((p) => {
+        if (p.locked) return;
+        const opt = document.createElement('option');
+        opt.value = p.key;
+        opt.textContent = p.name;
+        if (fresh.activeProduct === p.key) opt.selected = true;
         sel.appendChild(opt);
       });
     };
     sync();
-    sel.addEventListener('change', ()=>{ FK.setActiveProduct && FK.setActiveProduct(sel.value); S=FK.getState(); hydrateControls(); refreshTop(); });
-    wrap.querySelector('#btn-rnd').addEventListener('click', openRNDModal);
+    sel.addEventListener('change', () => {
+      FK.setActiveProduct && FK.setActiveProduct(sel.value);
+      S = FK.getState();
+      hydrateAdvancedControls();
+      refreshTop();
+    });
+    wrap.querySelector('#btn-rnd')?.addEventListener('click', openRNDModal);
     setInterval(sync, 2000);
-  }catch(_){}
+  } catch (_) {}
 }
-function openRNDModal(){
-  const S=FK.getState();
-  const list = Object.values(S.products||{});
-  const modal=document.createElement('div'); modal.id='rnd-modal';
-  Object.assign(modal.style,{position:'fixed',inset:'0',background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'100000'});
-  modal.innerHTML=`
-    <div style="background:#fff;color:#000;min-width:360px;max-width:720px;width:92%;border:2px solid #333;border-radius:10px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;background:#222;color:#fff">
-        <div>🔬 Laborator R&D</div><button id="rnd-close" class="btn small">✕</button>
-      </div>
-      <div style="padding:.6rem .8rem;max-height:60vh;overflow:auto">
-        <div id="rnd-list"></div>
-        <hr>
-        <div class="small muted">Tip: poți încărca rețete externe (JSON) cu <code>FK.loadRecipesJSON('data/recipes.json')</code> în consola browserului.</div>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector('#rnd-close').addEventListener('click', ()=>modal.remove());
-  const rndList=modal.querySelector('#rnd-list');
-  const paint=()=>{
-    const S=FK.getState(); rndList.innerHTML='';
-    list.forEach(p=>{
-      const unlocked = !p.locked && (S.research?.unlocked||[]).includes(p.key);
-      const row=document.createElement('div'); row.style.cssText='display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:center;border-bottom:1px solid #eee;padding:.35rem 0';
-      row.innerHTML = `
-        <div><b>${p.name}</b> <span class="small muted">P0:${p.P0} · TTL:${p.shelfLifeDays} · rețetă: ${p.recipeId}</span></div>
-        <div style="display:flex;gap:.35rem">
-          ${ unlocked ? `<button class="btn small act-test" data-k="${p.key}">🧪 Taste Test</button>` :
-                        `<button class="btn small act-unlock" data-k="${p.key}">🔓 Deblochează (300)</button>`}
-        </div>`;
-      rndList.appendChild(row);
-    });
-    // bind
-    rndList.querySelectorAll('.act-unlock').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const ok = FK.unlockProduct && FK.unlockProduct(btn.dataset.k, 300);
-        if(ok){
-          paint();
-          refreshTop();
-          const current = FK.getState();
-          const name = current.products?.[btn.dataset.k]?.name || 'Produs';
-          updateTicker(`${name} deblocat`);
-          celebrate('Produs deblocat!');
-        } else {
-          updateTicker('Nu sunt fonduri pentru R&D');
-        }
-      });
-    });
-    rndList.querySelectorAll('.act-test').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const key = btn.dataset.k;
-        const current = FK.getState();
-        const rid = (current.products?.[key]?.recipeId) || 'croissant_plain';
-        if(!FK.canProduce(rid, 6)){ updateTicker('Ingrediente insuficiente pentru prototip'); return; }
-        FK.consumeFor(rid, 6);
-        FK.addInventory(key, 6, Math.max(0.88, Math.min(0.98, 0.9 + (Math.random()*0.06 - 0.03))));
-        const name = current.products?.[key]?.name || 'Produs';
-        FK.addBuff({ id:'prototypeHype', label:`Hype ${name}`, minutes:45, trafficMult:1.06, qBonus:0.01 });
-        refreshTop();
-        updateTicker(`Prototip servit pentru ${name}`);
-        celebrate('Prototip reusit!');
-      });
-    });
-  };
-  paint();
-}
-
-// ---------- Wire evenimente UI existente ----------
-btnPause.addEventListener('click', ()=>{
-  const nowPaused = FK.getState().autosim?.running;
-  setPaused(nowPaused);
-  if(!nowPaused){ applyControlsToState(); }
-});
-rngPrice.addEventListener('input', ()=> inpPrice.value=rngPrice.value);
-inpPrice.addEventListener('input', ()=> rngPrice.value=inpPrice.value);
-[ inpLot, inpHHs, inpHHe, inpHHd, chkFlyer, chkSocial, selCashiers, upOven, upPos, upAuto ].forEach(el=> el.addEventListener('change', ()=>{}));
-speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset.speed))));
-document.getElementById('btn-import-manual')?.addEventListener('click', ()=> importFromManual(true));
-
-// ---------- Start ----------
-setPaused(false);
-loopStart();
-mount();
-
-// ---------- Micro-tweaks post-mount ----------
-try{
-  const t=document.getElementById('ticker'); if(t) t.textContent='Manager activ…';
-  const st=document.querySelector('#stationbar .station.active'); if(st) st.textContent='Manager';
-}catch(_){}
-
-// ---------- Done ----------
+window.openIngModal = openIngModal;
+window.openRNDModal = openRNDModal;

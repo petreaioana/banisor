@@ -1,0 +1,121 @@
+{
+  "difficulties": {
+    "easy": {
+      "baseTraffic": 95,
+      "priceFlex": {
+        "min": -0.10,
+        "max": 0.05,
+        "step": 0.05
+      },
+      "safetyFactor": 1.25,
+      "conversionTarget": 0.82,
+      "seasonMultiplier": {
+        "primavara": 1.0,
+        "vara": 1.1,
+        "toamna": 0.95,
+        "iarna": 0.9
+      },
+      "weatherMultiplier": {
+        "sunny": 1.0,
+        "cloudy": 0.95,
+        "rain": 0.9,
+        "snow": 0.85,
+        "heat": 0.92
+      },
+      "lowStockThreshold": 40,
+      "restock": {
+        "minLevel": 0.6,
+        "targetLevel": 2.0
+      },
+      "cashReserve": 0.15,
+      "roiDays": 6
+    },
+    "normal": {
+      "baseTraffic": 85,
+      "priceFlex": {
+        "min": -0.15,
+        "max": 0.1,
+        "step": 0.05
+      },
+      "safetyFactor": 1.15,
+      "conversionTarget": 0.8,
+      "seasonMultiplier": {
+        "primavara": 1.0,
+        "vara": 1.08,
+        "toamna": 0.96,
+        "iarna": 0.9
+      },
+      "weatherMultiplier": {
+        "sunny": 1.0,
+        "cloudy": 0.94,
+        "rain": 0.88,
+        "snow": 0.82,
+        "heat": 0.9
+      },
+      "lowStockThreshold": 30,
+      "restock": {
+        "minLevel": 0.5,
+        "targetLevel": 1.6
+      },
+      "cashReserve": 0.2,
+      "roiDays": 5
+    }
+  },
+  "products": {
+    "croissant": {
+      "P0": 10,
+      "cost": {
+        "ingredients": 3,
+        "labor": 0.5
+      },
+      "ttlDays": 2,
+      "happyHour": {
+        "discount": 0.10,
+        "start": "16:00",
+        "end": "17:00"
+      }
+    },
+    "donut": {
+      "P0": 9,
+      "cost": {
+        "ingredients": 2.6,
+        "labor": 0.6
+      },
+      "ttlDays": 1,
+      "happyHour": {
+        "discount": 0.1,
+        "start": "15:00",
+        "end": "16:00"
+      }
+    }
+  },
+  "ingredients": {
+    "flour": 2,
+    "milk": 3,
+    "sugar": 2,
+    "cacao": 5,
+    "chocolate_chips": 6,
+    "strawberries": 5,
+    "coconut": 4,
+    "sprinkles": 3,
+    "butter": 5,
+    "eggs": 3,
+    "yeast": 3,
+    "vanilla": 6,
+    "chocolate_glaze": 7,
+    "cream": 6,
+    "blueberries": 6
+  },
+  "buffs": {
+    "happyDay": {
+      "traffic": 1.08,
+      "quality": 0.02,
+      "duration": 480
+    },
+    "prototype": {
+      "traffic": 1.06,
+      "quality": 0.01,
+      "duration": 270
+    }
+  }
+}

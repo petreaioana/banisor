@@ -41,7 +41,16 @@ export const FK = (() => {
 
     // lume & meta
     world: { year: 1, season: 'primavara', day: 1, minute: 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES },
-    meta: { lastSeenTs: Date.now(), slot: 'autosave' },
+    meta: { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } },
+
+    modes: { kidMode: true, smartManager: true, difficulty: 'easy' },
+    policy: { autoProduce: true, autoRestock: true, autoPrice: true, autoStaff: true, autoEvents: true, autoUpgrades: true, focus: 'balanced', cashReserve: 0.15 },
+    goals: { targetSold: 0, targetQ: 0.9, earnedStars: 0 },
+    rewards: { badges: [], streakDays: 0, lastVoucherDay: null },
+    safety: { lowStockThreshold: 40, minPlan: 40, softExpiration: true },
+    kidsTelemetry: { lastSummary: null, records: { soldBest: 0, qBest: 0 } },
+    offline: { lastSeen: Date.now(), carryMinutes: 0, maxDays: 7 },
+    economyFlags: { useWaitTime: false, softExpiration: true },
 
     // marketing & upgrade-uri
     marketing: { flyerDaysLeft: 0, socialToday: false },
@@ -243,6 +252,21 @@ export const FK = (() => {
       S.version = 5;
       try { save(); } catch (_) { }
     }
+    S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } };
+    S.meta.config = S.meta.config || { economy: null, policies: null };
+    S.modes = Object.assign({}, DEF.modes, S.modes || {});
+    S.policy = Object.assign({}, DEF.policy, S.policy || {});
+    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
+    S.goals = Object.assign({}, DEF.goals, S.goals || {});
+    S.rewards = Object.assign({}, DEF.rewards, S.rewards || {});
+    if (!Array.isArray(S.rewards.badges)) S.rewards.badges = [];
+    S.safety = Object.assign({}, DEF.safety, S.safety || {});
+    S.kidsTelemetry = Object.assign({}, DEF.kidsTelemetry, S.kidsTelemetry || {});
+    if (!S.kidsTelemetry.records) S.kidsTelemetry.records = { soldBest: 0, qBest: 0 };
+    S.offline = Object.assign({}, DEF.offline, S.offline || {});
+    if (typeof S.offline.maxDays !== 'number' || S.offline.maxDays <= 0) S.offline.maxDays = DEF.offline.maxDays;
+    S.economyFlags = Object.assign({}, DEF.economyFlags, S.economyFlags || {});
+    if (!S.today) S.today = null;
   })();
 
   // ---------- Persistență (salvare pe slot + beacon către server) ----------
@@ -808,6 +832,86 @@ export const FK = (() => {
     return true;
   }
 
+  // ---------- Config loader ----------
+  let __configPromise = null;
+  function fetchJson(pathRelative) {
+    if (typeof fetch !== 'function') return Promise.resolve(null);
+    return fetch(pathRelative, { cache: 'no-store' }).then((res) => {
+      if (!res.ok) throw new Error(`FK config load failed ${pathRelative}`);
+      return res.json();
+    });
+  }
+  async function loadConfigs() {
+    const existing = getConfigs();
+    if (existing.economy && existing.policies) return existing;
+    if (!__configPromise) {
+      __configPromise = (async () => {
+        const [economy, policies] = await Promise.all([
+          fetchJson('dashboard_assets/js/config/economy.json'),
+          fetchJson('dashboard_assets/js/config/policies.json')
+        ]);
+        S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } };
+        S.meta.config = { economy, policies };
+        try { save(); } catch (_) { }
+        emit('config:loaded', S.meta.config);
+        return S.meta.config;
+      })().catch((err) => { __configPromise = null; throw err; });
+    }
+    return __configPromise;
+  }
+  function getConfigs() {
+    return (S.meta && S.meta.config) ? S.meta.config : { economy: null, policies: null };
+  }
+
+  function updateGoals(next) {
+    S.goals = Object.assign({}, DEF.goals, S.goals || {}, next || {});
+    save();
+    emit('goals:update', S.goals);
+    return S.goals;
+  }
+  function setPolicy(partial) {
+    S.policy = Object.assign({}, DEF.policy, S.policy || {}, partial || {});
+    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
+    save();
+    emit('policy:update', S.policy);
+    return S.policy;
+  }
+  function getPolicy() {
+    S.policy = Object.assign({}, DEF.policy, S.policy || {});
+    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
+    return S.policy;
+  }
+  function grantBadge(id, meta = {}) {
+    if (!id) return false;
+    S.rewards = Object.assign({}, DEF.rewards, S.rewards || {});
+    S.rewards.badges = Array.isArray(S.rewards.badges) ? S.rewards.badges : [];
+    if (S.rewards.badges.find((b) => b.id === id)) return false;
+    const badge = Object.assign({ id, when: Date.now() }, meta);
+    S.rewards.badges.push(badge);
+    save();
+    emit('rewards:badge', badge);
+    return true;
+  }
+  function recordKidSummary(summary) {
+    if (!summary) return;
+    S.kidsTelemetry = Object.assign({}, DEF.kidsTelemetry, S.kidsTelemetry || {});
+    S.kidsTelemetry.records = Object.assign({}, DEF.kidsTelemetry.records, S.kidsTelemetry.records || {});
+    S.kidsTelemetry.lastSummary = summary;
+    if (typeof summary.sold === 'number' && summary.sold > (S.kidsTelemetry.records.soldBest || 0)) {
+      S.kidsTelemetry.records.soldBest = summary.sold;
+    }
+    if (typeof summary.quality === 'number' && summary.quality > (S.kidsTelemetry.records.qBest || 0)) {
+      S.kidsTelemetry.records.qBest = summary.quality;
+    }
+    save();
+    emit('kids:summary', summary);
+  }
+  function markOfflineSeen(timestamp = Date.now()) {
+    S.offline = Object.assign({}, DEF.offline, S.offline || {});
+    S.offline.lastSeen = timestamp;
+    save();
+  }
+
   // ---------- API public ----------
   return {
     // Stare
@@ -815,6 +919,8 @@ export const FK = (() => {
     setState(next) { S = Object.assign(S, next); save(); },
     saveState: save,
     addBuff, tickBuffs,
+    loadConfigs, getConfigs,
+    updateGoals, setPolicy, getPolicy, grantBadge, recordKidSummary, markOfflineSeen,
 
     // Export/Import
     exportJSON, importJSON,
