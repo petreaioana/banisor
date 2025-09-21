@@ -1,10 +1,10 @@
 /**
- * FinKids Tycoon — Frontend logic (no modules)
+ * FinKids Tycoon - Frontend logic (no modules)
  * Ce face:
- *  - Leagă UI + inputuri + canvas cu API-ul PHP.
- *  - Gestionează starea jocului (pour/decor/bake/serve) și scorurile.
+ *  - Leaga UI + inputuri + canvas cu API-ul PHP.
+ *  - Gestioneaza starea jocului (pour/decor/bake/serve) si scorurile.
  *
- * Dependențe:
+ * Dependente:
  *  - API JSON: game_assets/api.php (state/serve/reset)
  *  - Imagini:  game_assets/images/*
  *
@@ -34,20 +34,40 @@ const FK = {
 };
 
 // ---------- Utils ----------
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
-const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+const on = (sel, evt, handler) => $$(sel).forEach(node => node.addEventListener(evt, handler));
+const setText = (target, text) => {
+  const node = typeof target === 'string' ? $(target) : target;
+  if (node) node.textContent = String(text);
+};
+const setFixed = (target, value, digits = 2) => {
+  const node = typeof target === 'string' ? $(target) : target;
+  if (node) node.textContent = Number(value || 0).toFixed(digits);
+};
+const toggleDisabled = (target, enabled) => {
+  const node = typeof target === 'string' ? $(target) : target;
+  if (!node) return;
+  enabled ? node.removeAttribute('disabled') : node.setAttribute('disabled', 'true');
+};
+
+const SIZE_MAP = {1:'S',2:'M',3:'L'};
+const SHAPE_LABEL = {circle:'Cerc', heart:'Inima', star:'Stea'};
+const SHAPES = Object.keys(SHAPE_LABEL);
+const randomOf = (arr) => arr[Math.floor(Math.random()*arr.length)];
 
 // ---------- Ingredients ----------
 const ING = [
-  { id:'chocolate_chips', name:'Cipuri ciocolată' },
-  { id:'strawberries',    name:'Căpșuni' },
+  { id:'chocolate_chips', name:'Cipuri ciocolata' },
+  { id:'strawberries',    name:'Capsuni' },
   { id:'coconut',         name:'Cocos' },
   { id:'sprinkles',       name:'Ornamente' },
   { id:'cacao',           name:'Cacao' },
-  { id:'sugar',           name:'Zahăr' },
+  { id:'sugar',           name:'Zahar' },
 ];
-// map ID → filename (in game_assets/images)
+const ING_MAP = Object.fromEntries(ING.map(item => [item.id, item]));
+
 const TOP_IMG = {
   chocolate_chips: 'chocolate_chips.png',
   strawberries:    'strawberries.png',
@@ -144,42 +164,48 @@ function setPhase(next){
   const canBakeStop  = next==='bake' && state.baking.running;
   const canServe     = next==='serve';
 
-  $('#btn-bake-start')?.toggleAttribute('disabled', !canBakeStart);
-  $('#btn-bake-stop') ?.toggleAttribute('disabled', !canBakeStop);
-  $('#btn-serve')     ?.toggleAttribute('disabled', !canServe);
+  toggleDisabled('#btn-bake-start', canBakeStart);
+  toggleDisabled('#btn-bake-stop',  canBakeStop);
+  toggleDisabled('#btn-serve',      canServe);
 }
 
 function updateMold(){
-  const mold=$('#shape-mold'); if(!mold || !state.order) return;
-  mold.className='shape shape--'+(state.order.shape||'circle');
-  const px = state.sizeKey==='S'?160 : state.sizeKey==='L'?240 : 200;
-  mold.style.setProperty('--mold-size', px+'px');
-
+  if(!state.order) return;
+  const mold=$('#shape-mold');
+  if(!mold) return;
+  mold.className = `shape shape--${state.order.shape || 'circle'}`;
+  const sizePx = state.sizeKey==='S'?160 : state.sizeKey==='L'?240 : 200;
+  mold.style.setProperty('--mold-size', sizePx+'px');
   const sel=$('#shape-select');
-  if(sel && sel.value!==state.order.shape) sel.value=state.order.shape;
-  $('#ord-shape') && ($('#ord-shape').textContent = (state.order.shape==='heart'?'Inimă':state.order.shape==='star'?'Stea':'Cerc'));
-  $('#ord-size')  && ($('#ord-size').textContent  = state.sizeKey);
+  if(sel && sel.value!==state.order.shape) sel.value = state.order.shape;
+  setText('#ord-shape', SHAPE_LABEL[state.order.shape] || 'Cerc');
+  setText('#ord-size', state.sizeKey);
 }
 
 function updateFillUI(){
-  const fill=$('#shape-fill'); if(!fill || !state.order) return;
+  const fill=$('#shape-fill');
+  if(!fill || !state.order) return;
   const pct=clamp(state.fillPct,0,1);
-  fill.style.height=Math.round(pct*100)+'%';
+  const pct100=Math.round(pct*100);
+  fill.style.height=pct100+'%';
   const [a,b]=state.order.pour;
   fill.classList.toggle('good', pct>=a && pct<=b);
-  $('#pour-pct')  && ($('#pour-pct').textContent  = String(Math.round(pct*100)));
-  $('#pour-range')&& ($('#pour-range').value = String(Math.round(pct*100)));
-  calcPourScore(); renderScores();
+  setText('#pour-pct', pct100);
+  const slider=$('#pour-range');
+  if(slider) slider.value = String(pct100);
+  calcPourScore();
+  renderScores();
 }
 
 function updateHitWindowUI(){
   if(!state.order) return;
   const [a,b]=state.order.bake;
-  const span=document.querySelector('.hit-window span'); if(span){
+  const span=document.querySelector('.hit-window span');
+  if(span){
     span.style.left=Math.round(a*100)+'%';
     span.style.width=Math.round((b-a)*100)+'%';
   }
-  $('#bake-window-label') && ($('#bake-window-label').textContent = `${Math.round(a*100)}–${Math.round(b*100)}%`);
+  setText('#bake-window-label', `${Math.round(a*100)}% - ${Math.round(b*100)}%`);
 }
 
 function buildPalette(){
@@ -203,7 +229,7 @@ function spawnChip(id){
   chip.style.left=(25+Math.random()*50)+'%';
   chip.style.top =(25+Math.random()*50)+'%';
 
-  // imaginea efectivă a toppingului
+  // imaginea efectiva a toppingului
   const img=document.createElement('img');
   img.src = 'game_assets/images/' + (TOP_IMG[id] || 'sprinkles.png');
   img.alt = (ING.find(i=>i.id===id)?.name) || id;
@@ -243,25 +269,21 @@ function readPlacedFromDOM(){
 }
 function savePlaced(){
   state.placed = readPlacedFromDOM();
-  $('#placed-count') && ($('#placed-count').textContent = String(state.placed.length));
+  setText('#placed-count', state.placed.length);
   calcTopScore(); renderScores();
 }
 
 // ---------- Scoring ----------
 function calcTopScore(){
   if(!state.order){ state.scores.top=0; return; }
-  const want=new Set(state.order.tops);
-  const have=new Set(state.placed.map(p=>p.id));
-  let pts=0;
-  want.forEach(id=>{ if(have.has(id)) pts+=25; });
-  pts=Math.min(100, pts);
-
-  if(state.placed.length>1){
-    const mx=state.placed.reduce((s,p)=>s+p.x,0)/state.placed.length;
-    const my=state.placed.reduce((s,p)=>s+p.y,0)/state.placed.length;
-    let spread=0; state.placed.forEach(p=>{ const dx=p.x-mx, dy=p.y-my; spread+=Math.sqrt(dx*dx+dy*dy); });
-    const spreadScore = clamp(spread/(state.placed.length*20),0,1)*20;
-    pts = clamp(pts + spreadScore, 0, 100);
+  const placed = state.placed;
+  let pts = state.order.tops.reduce((sum,id)=> sum + (placed.some(p=>p.id===id) ? 25 : 0), 0);
+  pts = Math.min(100, pts);
+  if(placed.length>1){
+    const mx = placed.reduce((s,p)=>s+p.x,0)/placed.length;
+    const my = placed.reduce((s,p)=>s+p.y,0)/placed.length;
+    const spread = placed.reduce((s,p)=> s + Math.hypot(p.x-mx, p.y-my), 0);
+    pts = clamp(pts + clamp(spread/(placed.length*20),0,1)*20, 0, 100);
   }
   state.scores.top = Math.round(pts);
 }
@@ -287,24 +309,23 @@ function computeFinalScores(){
   state.scores.qty = qty;
 }
 function renderScores(){
-  $('#score-pour') && ($('#score-pour').textContent = String(state.scores.pour));
-  $('#score-top')  && ($('#score-top').textContent  = String(state.scores.top));
-  $('#score-bake') && ($('#score-bake').textContent = String(state.scores.bake));
-  $('#score-q')    && ($('#score-q').textContent    = (state.scores.q||0).toFixed(2));
-  $('#score-qty')  && ($('#score-qty').textContent  = String(state.scores.qty||0));
-  $('#score-q-serve')   && ($('#score-q-serve').textContent   = (state.scores.q||0).toFixed(2));
-  $('#score-qty-serve') && ($('#score-qty-serve').textContent = String(state.scores.qty||0));
+  const {pour, top, bake, q, qty} = state.scores;
+  [['#score-pour', pour], ['#score-top', top], ['#score-bake', bake], ['#score-qty', qty], ['#score-qty-serve', qty]]
+    .forEach(([sel, val]) => setText(sel, val));
+  ['#score-q', '#score-q-serve'].forEach(sel => setFixed(sel, q));
 }
 
 // ---------- Bake ----------
 function startBake(){
-  if(state.phase!=='bake') return;
-  if(state.baking.locked || state.baking.running) return;
-  state.baking.running=true; state.baking.p=0;
-  $('#btn-bake-start')?.setAttribute('disabled','true');
-  $('#btn-bake-stop') ?.removeAttribute('disabled');
-  $('#oven-img')?.setAttribute('src','game_assets/images/oven_closed.png');
-  const bar=$('#bake-bar'); clearInterval(bakeTimer);
+  if(state.phase!=='bake' || state.baking.locked || state.baking.running) return;
+  state.baking.running=true;
+  state.baking.p=0;
+  toggleDisabled('#btn-bake-start', false);
+  toggleDisabled('#btn-bake-stop', true);
+  const img=$('#oven-img');
+  if(img) img.setAttribute('src','game_assets/images/oven_closed.png');
+  const bar=$('#bake-bar');
+  clearInterval(bakeTimer);
   const dur=state.baking.dur, step=90;
   bakeTimer=setInterval(()=>{
     state.baking.p = clamp(state.baking.p + step/dur, 0, 1);
@@ -316,37 +337,55 @@ function startBake(){
 function stopBake(){
   if(!state.baking.running) return;
   state.baking.running=false;
-  clearInterval(bakeTimer); bakeTimer=null;
-  $('#btn-bake-stop')?.setAttribute('disabled','true');
-  $('#oven-img')?.setAttribute('src','game_assets/images/oven_open.png');
+  clearInterval(bakeTimer);
+  bakeTimer=null;
+  toggleDisabled('#btn-bake-stop', false);
+  const img=$('#oven-img');
+  if(img) img.setAttribute('src','game_assets/images/oven_open.png');
 
   const p=state.baking.p, [a,b]=state.baking.zone;
   const c=(a+b)/2, maxD=Math.max(0.0001,(b-a)/2), d=Math.abs(p-c);
   const inWin = p>=a && p<=b;
-  state.baking.inWin=inWin; state.baking.attempted=true; state.baking.locked=true;
+  state.baking.inWin=inWin;
+  state.baking.attempted=true;
+  state.baking.locked=true;
 
   state.scores.bake = Math.round(clamp(100*(1-Math.min(1,d/maxD)), 0, 100));
 
-  if(inWin){ playDing(); ovenPuff(true); }
-  else     { playBuzz(); $('#oven-img')?.classList.add('shake'); setTimeout(()=>$('#oven-img')?.classList.remove('shake'),380); ovenPuff(false); }
+  if(inWin){
+    playDing();
+    ovenPuff(true);
+  } else {
+    playBuzz();
+    if(img){
+      img.classList.add('shake');
+      setTimeout(()=>img.classList.remove('shake'),380);
+    }
+    ovenPuff(false);
+  }
 
-  computeFinalScores(); renderScores();
+  computeFinalScores();
+  renderScores();
   setPhase('serve');
 }
 
 // ---------- Serve ----------
 async function serveClient(){
-  if(state.phase!=='serve'){ toast('Finalizează coacerea înainte de servire.'); return; }
+  if(state.phase!=='serve') return void toast('Finalizeaza coacerea inainte de servire.');
   computeFinalScores();
-  const q=state.scores.q||0.86, qty=state.scores.qty||8;
+  const q=state.scores.q||0.86;
+  const qty=state.scores.qty||8;
   const inWin = !!state.baking.inWin;
 
   try{
     const res = await FK.serve(qty, q, inWin);
-    if(res && res.ok){
+    if(res?.ok){
       const btn=$('#btn-serve');
-      if(btn){ const r=btn.getBoundingClientRect(); confettiAt(r.left+r.width/2, r.top+r.height/2, 24); }
-      toast(`✅ Servit! +${qty} stoc · Q ${q.toFixed(2)}`);
+      if(btn){
+        const r=btn.getBoundingClientRect();
+        confettiAt(r.left+r.width/2, r.top+r.height/2, 24);
+      }
+      toast(`Servit! +${qty} stoc, Q ${q.toFixed(2)}`);
       await refreshTopbar();
       newOrder();
       setPhase('pour');
@@ -354,23 +393,24 @@ async function serveClient(){
       toast('Eroare la servire.');
     }
   }catch(e){
-    console.error(e); toast('Eroare de rețea la servire.');
+    console.error(e);
+    toast('Eroare de retea la servire.');
   }
 }
 
 // ---------- Order / topbar ----------
 function renderOrder(){
   if(!state.order) return;
-  $('#ord-shape') && ($('#ord-shape').textContent = (state.order.shape==='heart'?'Inimă':state.order.shape==='star'?'Stea':'Cerc'));
-  $('#ord-size')  && ($('#ord-size').textContent  = state.order.size);
-  $('#ord-bake')  && ($('#ord-bake').textContent  = `${Math.round(state.order.bake[0]*100)}–${Math.round(state.order.bake[1]*100)}%`);
+  const {shape, size, bake, tops} = state.order;
+  setText('#ord-shape', SHAPE_LABEL[shape] || 'Cerc');
+  setText('#ord-size', size);
+  setText('#ord-bake', `${Math.round(bake[0]*100)}% - ${Math.round(bake[1]*100)}%`);
   const ul=$('#ord-tops');
   if(ul){
     ul.innerHTML='';
-    state.order.tops.forEach(id=>{
+    tops.forEach(id=>{
       const li=document.createElement('li');
-      const name = (ING.find(i=>i.id===id)?.name)||id;
-      li.textContent = name;
+      li.textContent = ING_MAP[id]?.name || id;
       ul.appendChild(li);
     });
   }
@@ -378,22 +418,19 @@ function renderOrder(){
 async function refreshTopbar(){
   try{
     const s = await FK.state();
-    if(s && s.ok){
-      $('#g-stock') && ($('#g-stock').textContent = String(s.stock?.units ?? 0));
-      const pct = Math.round(s.boost?.percent || 0);
-      const cnt = (s.boost?.buffs?.length) || 0;
-      $('#g-boost') && ($('#g-boost').textContent = pct + '%' + (cnt>0?` (${cnt})`:'')); }
+    if(!s?.ok) return;
+    setText('#g-stock', s.stock?.units ?? 0);
+    const pct = Math.round(s.boost?.percent || 0);
+    const buffCount = s.boost?.buffs?.length || 0;
+    setText('#g-boost', `${pct}%${buffCount ? ` (${buffCount})` : ''}`);
   }catch(_){}
 }
 
 function newOrder(){
-  const map={1:'S',2:'M',3:'L'};
   const slider=$('#size-range');
-  state.sizeKey = map[ Number(slider?.value||2) ] || 'M';
+  state.sizeKey = SIZE_MAP[Number(slider?.value||2)] || 'M';
 
-  const shapes=['circle','heart','star'];
-  const shape=shapes[Math.floor(Math.random()*shapes.length)];
-
+  const shape = randomOf(SHAPES);
   const tops = ING.slice().sort(()=>Math.random()-0.5).slice(0, 2+Math.floor(Math.random()*3)).map(t=>t.id);
 
   const bakeCenter = 0.54 + (Math.random()*0.06 - 0.03);
@@ -414,67 +451,110 @@ function newOrder(){
   state.placed=[];
   state.baking={ running:false, dur:2800+Math.floor(Math.random()*900), p:0, zone:[...state.order.bake], inWin:false, attempted:false, locked:false };
   state.scores={ pour:0, top:0, bake:0, q:0, qty:0 };
+  clearInterval(bakeTimer); bakeTimer=null;
+  clearInterval(pourTimer); pourTimer=null;
 
   const sel=$('#shape-select'); if(sel) sel.value=shape;
   updateMold();
   updateFillUI();
   renderOrder();
   const zone=$('#dropzone'); if(zone) zone.innerHTML='';
-  $('#placed-count') && ($('#placed-count').textContent = '0');
+  setText('#placed-count', 0);
   updateHitWindowUI();
   renderScores();
 }
 
 // ---------- Events ----------
 function wireEvents(){
-  $('#btn-prev')?.addEventListener('click', ()=>{
+  on('#btn-prev', 'click', () => {
+    if(state.phase==='bake' && state.baking.running){ toast('Opreste coacerea mai intai.'); return; }
     const idx=Math.max(0, PHASES.indexOf(state.phase)-1);
-    if(state.phase==='bake' && state.baking.running){ toast('Oprește coacerea mai întâi.'); return; }
     setPhase(PHASES[idx]);
   });
-  $('#btn-next')?.addEventListener('click', ()=>{
-    const idx=Math.min(PHASES.length-1, PHASES.indexOf(state.phase)+1);
-    if(state.phase==='pour'){ if(!state.order) return; if(state.fillPct < state.order.pour[0]){ toast('Toarnă puțin mai mult!'); return; } }
-    if(state.phase==='decorate'){ if(state.placed.length<2){ toast('Adaugă cel puțin două toppinguri.'); return; } }
-    if(state.phase==='bake'){ if(!state.baking.attempted){ toast('Pornește coacerea înainte de a continua.'); return; } }
+  on('#btn-next', 'click', () => {
+    const phase = state.phase;
+    if(phase==='pour'){
+      if(!state.order) return;
+      if(state.fillPct < state.order.pour[0]) return void toast('Toarna putin mai mult!');
+    }
+    if(phase==='decorate' && state.placed.length<2) return void toast('Adauga cel putin doua toppinguri.');
+    if(phase==='bake'){
+      if(state.baking.running) return void toast('Opreste coacerea mai intai.');
+      if(!state.baking.attempted) return void toast('Porneste coacerea inainte de a continua.');
+    }
+    const idx=Math.min(PHASES.length-1, PHASES.indexOf(phase)+1);
     setPhase(PHASES[idx]);
   });
 
-  $('#btn-new-order')?.addEventListener('click', ()=>{ newOrder(); setPhase('pour'); });
+  on('#btn-new-order', 'click', () => { newOrder(); setPhase('pour'); });
 
-  // Pour
-  $('#btn-pour-hold')?.addEventListener('pointerdown', (e)=>{ e.preventDefault(); clearInterval(pourTimer); pourTimer=setInterval(()=>{ state.fillPct=clamp(state.fillPct+0.01,0,1); updateFillUI(); }, 70); });
-  ['pointerup','pointerleave','pointercancel'].forEach(ev => $('#btn-pour-hold')?.addEventListener(ev, ()=>{ clearInterval(pourTimer); pourTimer=null; }));
-  $('#pour-range')?.addEventListener('input', (e)=>{ const v=Number(e.target.value||0); state.fillPct=clamp(v/100,0,1); updateFillUI(); });
+  const pourBtn=$('#btn-pour-hold');
+  if(pourBtn){
+    pourBtn.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      clearInterval(pourTimer);
+      pourTimer=setInterval(()=>{
+        state.fillPct=clamp(state.fillPct+0.01,0,1);
+        updateFillUI();
+      }, 70);
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => pourBtn.addEventListener(ev, ()=>{
+      clearInterval(pourTimer);
+      pourTimer=null;
+    }));
+  }
+  $('#pour-range')?.addEventListener('input', (e)=>{
+    state.fillPct=clamp(Number(e.target.value||0)/100,0,1);
+    updateFillUI();
+  });
 
-  // Decor
   buildPalette();
 
-  // Size + shape
-  $('#size-range')?.addEventListener('input', (e)=>{ const map={1:'S',2:'M',3:'L'}; state.sizeKey = map[ Number(e.target.value||2) ] || 'M'; $('#size-label') && ($('#size-label').textContent = state.sizeKey); updateMold(); computeFinalScores(); renderScores(); });
-  $('#shape-select')?.addEventListener('change', (e)=>{ if(!state.order) return; state.order.shape = e.target.value||'circle'; updateMold(); });
+  $('#size-range')?.addEventListener('input', (e)=>{
+    state.sizeKey = SIZE_MAP[Number(e.target.value||2)] || 'M';
+    setText('#size-label', state.sizeKey);
+    updateMold();
+    computeFinalScores();
+    renderScores();
+  });
+  $('#shape-select')?.addEventListener('change', (e)=>{
+    if(!state.order) return;
+    state.order.shape = e.target.value || 'circle';
+    updateMold();
+  });
 
-  // Bake controls
-  $('#btn-bake-start')?.addEventListener('click', startBake);
-  $('#btn-bake-stop') ?.addEventListener('click', stopBake);
-  document.addEventListener('keydown', (e)=>{ if(e.code==='Space' && state.phase==='bake'){ e.preventDefault(); if(state.baking.running) stopBake(); } });
+  on('#btn-bake-start', 'click', startBake);
+  on('#btn-bake-stop', 'click', stopBake);
+  document.addEventListener('keydown', (e)=>{
+    if(e.code==='Space' && state.phase==='bake'){
+      e.preventDefault();
+      if(state.baking.running) stopBake();
+    }
+  });
 
-  // Serve
-  $('#btn-serve')?.addEventListener('click', serveClient);
+  on('#btn-serve', 'click', serveClient);
 
-  // Audio toggle
-  $('#btn-audio')?.addEventListener('click', (e)=>{ audioOn=!audioOn; e.currentTarget.setAttribute('aria-pressed', audioOn?'true':'false'); e.currentTarget.textContent = audioOn?'🔊 Sunet':'🔈 Mut'; toast(audioOn?'🔊 Sunet ON':'🔈 Sunet OFF'); });
+  on('#btn-audio', 'click', (e) => {
+    audioOn = !audioOn;
+    e.currentTarget.setAttribute('aria-pressed', audioOn ? 'true' : 'false');
+    e.currentTarget.textContent = audioOn ? 'Sunet' : 'Mut';
+    toast(audioOn ? 'Sunet activat' : 'Sunet oprit');
+  });
 
-  // Reset
-  $('#btn-reset')?.addEventListener('click', async ()=>{
-    try{ await FK.reset(); await refreshTopbar(); toast('Sesiune resetată.'); }catch(_){}
+  on('#btn-reset', 'click', async () => {
+    try{
+      await FK.reset();
+      await refreshTopbar();
+      toast('Sesiune resetata.');
+    }catch(_){ }
   });
 }
 
 // ---------- Init ----------
 async function mount(){
   wireEvents();
-  const map={1:'S',2:'M',3:'L'}; const slider=$('#size-range'); if($('#size-label')&&slider){ $('#size-label').textContent = map[ Number(slider.value||2) ] || 'M'; }
+  const slider=$('#size-range');
+  if(slider) setText('#size-label', SIZE_MAP[Number(slider.value||2)] || 'M');
   newOrder();
   updateHitWindowUI();
   setPhase('pour');
