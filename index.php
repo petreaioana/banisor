@@ -2,7 +2,7 @@
 // index.php — FinKids Tycoon: Dashboard (autosim, cu seed JSON pe disc)
 declare(strict_types=1);
 session_start();
-require __DIR__ . '/lib/jsonfs.php';
+//require __DIR__ . '/lib/jsonfs.php';
 
 // 1) Endpoint snapshot din client (salvat pe disc în data/autosim/profile_autosave.json)
 if (isset($_GET['action']) && $_GET['action'] === 'save') {
