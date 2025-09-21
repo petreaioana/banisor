@@ -11,8 +11,9 @@
 
 declare(strict_types=1);
 
+
 require __DIR__ . '/lib/fk.php';
-require __DIR__ . '/../lib/jsonfs.php';
+require __DIR__ . '/lib/jsonfs.php'; // ✅ CORECTAT
 
 header('Content-Type: application/json; charset=utf-8');
 
