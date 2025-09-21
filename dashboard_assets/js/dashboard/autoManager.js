@@ -264,8 +264,6 @@ function ensureCashReserve(S, economy, difficulty) {
   return (S.cash || 0) * reserveRatio;
 }
 
-}
-
 function computeGoals(plannedQty) {
   const targetSold = Math.round(plannedQty * 0.85);
   return {
