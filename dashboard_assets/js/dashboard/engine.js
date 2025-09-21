@@ -10,11 +10,16 @@
 // =====================================================
 
 import { FK } from '../shared/state.js';
+import AutoManager from './autoManager.js';
+import { initSmartManagerUI, refreshSmartManagerUI, setOfflineNotice } from './uiSmart.js';
 
 const $  = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 const clamp = FK.clamp;
 const DAY_MINUTES = FK.DAY_MINUTES;
+
+if (FK.loadEconomyConfig) { try { FK.loadEconomyConfig(); } catch (_) {} }
+if (FK.loadPolicyConfig) { try { FK.loadPolicyConfig(); } catch (_) {} }
 
 // Stare
 let S = FK.getState();
@@ -143,7 +148,17 @@ function consumeInventory(qty){
   const qAvg = sold>0 ? (qWeighted/sold) : avgQuality();
   FK.saveState();
   return { sold, qAvg };
+}function computeCashReserveValue(state){
+  try {
+    const policy = FK.getPolicy ? FK.getPolicy() : state.policy;
+    const ratio = typeof policy?.cashReserve === 'number' ? policy.cashReserve : 0.15;
+    return Math.max(0, (state.cash || 0) * ratio);
+  } catch (_) {
+    return Math.max(0, (state.cash || 0) * 0.15);
+  }
 }
+
+
 
 // ---------- Sezon/Meteo/Evenimente ----------
 function seasonWeather(){
@@ -210,13 +225,21 @@ function refreshTop(){
   try{ if(typeof updateTickerBadge==='function') updateTickerBadge(); }catch(_){}
 }
 function setMetrics({N=0,C=0,W=0,Q=0,sold=0,rev=0,profit=0}){
-  barQ.style.width = Math.round(Math.max(0,Math.min(Q,1))*100)+'%';
-  barW.style.width = Math.round(Math.max(0,Math.min(W/ECON.Wmax,1))*100)+'%';
-  barC.style.width = Math.round(Math.max(0,Math.min(C,0.95))*100)+'%';
-  barN.style.width = Math.round(Math.max(0,Math.min(N/(ECON.F_base*1.5),1))*100)+'%';
+  barQ.style.width = Math.round(Math.max(0, Math.min(Q, 1)) * 100) + '%';
+  const state = FK.getState();
+  if (state?.modes?.kidMode && state?.economyFlags?.useWaitTime === false) {
+    const waitState = W <= 1 ? 'Mică' : W <= 3 ? 'OK' : 'Mare';
+    barW.style.width = W <= 1 ? '33%' : W <= 3 ? '66%' : '100%';
+    barW.textContent = waitState;
+  } else {
+    barW.style.width = Math.round(Math.max(0, Math.min(W / ECON.Wmax, 1)) * 100) + '%';
+    barW.textContent = '';
+  }
+  barC.style.width = Math.round(Math.max(0, Math.min(C, 0.95)) * 100) + '%';
+  barN.style.width = Math.round(Math.max(0, Math.min(N / (ECON.F_base * 1.5), 1)) * 100) + '%';
   mSold.textContent = String(sold);
-  mRev.textContent  = fmt(rev,0);
-  mProf.textContent = fmt(profit,0);
+  mRev.textContent  = fmt(rev, 0);
+  mProf.textContent = fmt(profit, 0);
 }
 
 // ---------- Bucla minute ----------
@@ -224,150 +247,234 @@ function toMinutes(hhmm){ const [h,m]=String(hhmm||'16:00').split(':').map(Numbe
 
 function stepAuto(){
   S = FK.getState();
-  if(!S.autosim?.running) return;
+  if (!S.autosim?.running) return;
 
-  const k    = activeKey();
-  const prod = S.products[k];
-  const dayStart = S.world?.open || 8*60;
+  const key = activeKey();
+  const prod = S.products[key];
+  if (!prod) return;
 
-  // timp
-  S.timeMin += 1;
+  const dayStart = S.world?.open || 8 * 60;
 
-  // producție matinală (primele 120 min)
-const earlyWindow = (S.timeMin - dayStart) < 120;
-if(earlyWindow){
-  const planPerMin = Math.ceil((prod.plannedQty||0) / 120);
-  const ovenFactor = S.upgrades?.ovenPlus?1.5:1;
+  S.timeMin = (S.timeMin || dayStart) + 1;
+  if (S.world) { S.world.minute = S.timeMin; }
 
-  const baseCapPerMin = ((S.capacity?.ovenBatchSize||50)*ovenFactor*(S.capacity?.ovenBatchesPerDay||2))/DAY_MINUTES;
+  try { AutoManager.onMinute(); } catch (err) { console.error('[AutoManager] onMinute', err); }
 
-  // nou: o parte din boost se traduce în productivitate (max +30% pentru un boost mare)
-  const prodFactorFromBoost = 1 + Math.min(0.30, Math.max(0, (S.boost?.percent||0)/100 * 0.30));
-  const ovenCapPerMin = Math.ceil(baseCapPerMin * prodFactorFromBoost);
+  const morningWindow = S.safety?.morningWindowMinutes ?? 120;
+  if ((S.timeMin - dayStart) <= morningWindow) {
+    const producedToday = S.autosim?.producedToday || 0;
+    const planQty = Math.max(0, Math.round(prod.plannedQty || 0));
+    const remainingPlan = Math.max(0, planQty - producedToday);
+    if (remainingPlan > 0) {
+      const minutesLeft = Math.max(1, morningWindow - Math.max(0, S.timeMin - dayStart));
+      const targetBatch = Math.min(remainingPlan, Math.ceil(remainingPlan / minutesLeft));
+      const rid = prod.recipeId || 'croissant_plain';
+      const need = (S.recipes?.[rid]?.ingredients) || {};
+      const maxByStock = Object.keys(need).length > 0 ? Math.min(...Object.entries(need).map(([id, qty]) => Math.floor(((S.ingredients?.[id]?.qty) || 0) / Math.max(1, qty)))) : targetBatch;
+      const made = Math.max(0, Math.min(targetBatch, maxByStock || 0));
+      if (made > 0) {
+        FK.consumeFor(rid, made);
+        const baseQ = clamp(0.86 + (S.boost?.qBonus || 0) + (S.upgrades?.ovenPlus ? 0.02 : 0) + (S.upgrades?.timerAuto ? 0.02 : 0), 0.72, 0.98);
+        const noise = (Math.random() * 0.06) - 0.03;
+        FK.addInventory(key, made, clamp(baseQ + noise, 0.72, 0.99));
+        S.autosim.producedToday = (S.autosim.producedToday || 0) + made;
+      }
+    }
+  }
 
-  const rid = (prod?.recipeId)||'croissant_plain';
-  const need = (S.recipes?.[rid]?.ingredients)||{};
-  const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([id,qty]) => Math.floor(((S.ingredients?.[id]?.qty)||0)/Math.max(1,qty)))) : planPerMin;
+  const Nday = trafficN();
+  const lambdaMin = Nday / DAY_MINUTES;
+  const arrivals = (Math.random() < lambdaMin ? 1 : 0) + (Math.random() < lambdaMin ? 1 : 0) + (Math.random() < lambdaMin ? 1 : 0);
 
-  const made = Math.max(0, Math.min(planPerMin, ovenCapPerMin, maxByStoc||0));
-  if(made>0){
-    FK.consumeFor(rid, made);
-    const baseQ = 0.86 + (S.upgrades?.ovenPlus?0.02:0) + (S.upgrades?.timerAuto?0.02:0) + (S.boost?.qBonus||0);
-    const noise = (Math.random()*0.06)-0.03;
-    addInventory(made, Math.max(0.70, Math.min(0.98, baseQ + noise)));
+  const baseMu = FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier || 1) : ((S.capacity?.cashierMu || 1.5) + (S.upgrades?.posRapid ? 0.8 : 0) + Math.max(0, (S.staff?.cashier || 1) - 1) * 0.5);
+  const sw = seasonWeather();
+  const evm = eventMods();
+  let W = waitW(arrivals, baseMu) + (S.boost?.wBonus || 0) + (sw.wait || 0) + (evm.wait || 0);
+  W = Math.max(0, W);
+
+  const P0 = prod.P0 || 10;
+  let P = prod.price || P0;
+  const hh = prod.happyHour || { enabled: false, start: '16:00', end: '17:00', discount: 0.10 };
+  const HHs = toMinutes(hh.start);
+  const HHe = toMinutes(hh.end);
+  if (hh.enabled && S.timeMin >= HHs && S.timeMin < HHe) {
+    P = P * (1 - clamp(hh.discount || 0.10, 0.05, 0.25));
+  }
+
+  const Q = Math.max(0, Math.min(1, avgQuality() + (S.boost?.qBonus || 0) + (sw.qBonus || 0) + (evm.qBonus || 0)));
+  const C = clamp(conversionC(P, P0, Q, W) + (evm.conv || 0), 0, 0.95);
+
+  const currentStock = totalStock();
+  const demandMin = Math.max(0, Math.round(arrivals * C));
+  const { sold } = consumeInventory(Math.min(currentStock, demandMin));
+  const rev = sold * P;
+  const unitCost = (prod.cost?.ingredients || 3) + (prod.cost?.laborVar || 0.5);
+  const cogs = sold * unitCost;
+
+  const A = S.autosim.aggregates || (S.autosim.aggregates = { sold: 0, rev: 0, cogs: 0, holding: 0, marketing: 0, profit: 0, N: 0, C: 0, W: 0, Q: 0 });
+  A.sold += sold;
+  A.rev += rev;
+  A.cogs += cogs;
+  A.N = Nday;
+  A.C = C;
+  A.W = W;
+  A.Q = Q;
+
+  S.cash = (S.cash || 0) + rev;
+
+  FK.tickBuffs(1);
+
+  const reserve = computeCashReserveValue(S);
+  if ((S.cash || 0) < reserve) {
+    if (!S.autosim._lowCashWarned) {
+      try { AutoManager.onLowCash(); } catch (err) { console.error('[AutoManager] onLowCash', err); }
+      S.autosim._lowCashWarned = true;
+    }
+  } else {
+    S.autosim._lowCashWarned = false;
+  }
+
+  const middayTarget = S.safety?.middayCheckMinute ?? 240;
+  if (!S.autosim._middayTriggered && (S.timeMin - dayStart) >= middayTarget) {
+    try { AutoManager.onMiddayCheck(); } catch (err) { console.error('[AutoManager] onMiddayCheck', err); }
+    S.autosim._middayTriggered = true;
+  }
+
+  FK.setState(S);
+  refreshTop();
+  setMetrics({
+    N: Nday,
+    C,
+    W,
+    Q,
+    sold: A.sold,
+    rev: A.rev,
+    profit: (A.rev - A.cogs)
+  });
+
+  if (S.timeMin >= dayStart + DAY_MINUTES) {
+    endOfDay();
+    S.autosim._middayTriggered = false;
+    S.autosim._lowCashWarned = false;
   }
 }
 
 
-  // trafic minute + sosiri
-  const Nday      = trafficN();
-  const lambdaMin = Nday / DAY_MINUTES;
-  const arrivals  = (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0) + (Math.random()<lambdaMin?1:0);
-
-  // servicii
-  const baseMu = (FK.getCashierMu ? FK.getCashierMu(S.staff?.cashier||1) : ((S.capacity?.cashierMu||1.5) + (S.upgrades?.posRapid?0.8:0) + Math.max(0,(S.staff?.cashier||1)-1)*0.5));
-  const sw = seasonWeather();
-  const evm = eventMods();
-  let W = waitW(arrivals, baseMu) + (S.boost?.wBonus||0) + (sw.wait||0) + (evm.wait||0);
-  W = Math.max(0, W);
-
-  // preț / happy-hour
-  const P0 = prod.P0 || 10; let P = prod.price || P0;
-  const hh = prod.happyHour||{enabled:false,start:'16:00',end:'17:00',discount:0.10};
-  const HHs=toMinutes(hh.start), HHe=toMinutes(hh.end);
-  if(hh.enabled && S.timeMin>=HHs && S.timeMin<HHe) P = P * (1 - clamp(hh.discount||0.10,0.05,0.25));
-
-  // calitate + conversie
-  const Q = Math.max(0, Math.min(1, avgQuality() + (S.boost?.qBonus||0) + (sw.qBonus||0) + (evm.qBonus||0)));
-  const C = clamp(conversionC(P,P0,Q,W) + (evm.conv||0), 0, 0.95);
-
-  // cerere minut & vânzare din stoc
-  const demandMin   = Math.max(0, Math.round(arrivals * C));
-  const { sold }    = consumeInventory(Math.min(totalStock(), demandMin));
-  const rev         = sold * P;
-  const unitCost    = (prod.cost?.ingredients||3) + (prod.cost?.laborVar||0.5);
-  const cogs        = sold * unitCost;
-
-  // agregate zi
-  const A=S.autosim.aggregates || (S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0});
-  A.sold+=sold; A.rev+=rev; A.cogs+=cogs; A.N=Nday; A.C=C; A.W=W; A.Q=Q;
-
-  // cash (doar venituri, costuri zilnice la endOfDay)
-  S.cash = (S.cash||0) + rev;
-
-  // Buffs tick
-  FK.tickBuffs(1);
-
-  // persist & UI
+function planNewDay(){
+  S = FK.getState();
+  S.autosim = S.autosim || { running: false, speed: 1, tickMsBase: 200, aggregates: { sold: 0, rev: 0, cogs: 0, holding: 0, marketing: 0, profit: 0, N: 0, C: 0, W: 0, Q: 0 } };
+  S.autosim.aggregates = S.autosim.aggregates || { sold: 0, rev: 0, cogs: 0, holding: 0, marketing: 0, profit: 0, N: 0, C: 0, W: 0, Q: 0 };
+  S.autosim.producedToday = 0;
+  S.autosim._middayTriggered = false;
+  S.autosim._lowCashWarned = false;
   FK.setState(S);
-  refreshTop();
-  setMetrics({
-    N:Nday, C, W, Q,
-    sold:A.sold, rev:A.rev,
-    profit: (A.rev - A.cogs) // simplu live; costuri fixe la end-of-day
-  });
-
-  // end-of-day
-  if(S.timeMin >= dayStart + DAY_MINUTES){ endOfDay(); }
+  try { AutoManager.onDayStart(); } catch (err) { console.error('[AutoManager] onDayStart', err); }
+  try { AutoManager.onEventToday(); } catch (err) { console.error('[AutoManager] onEventToday', err); }
+  if (FK.consumeOfflineSummary) {
+    try {
+      const offline = FK.consumeOfflineSummary();
+      if (offline) { setOfflineNotice(offline); }
+    } catch (_) {}
+  }
+  try { hydrateControls(); } catch (_) {}
+  try { refreshTop(); } catch (_) {}
+  try { refreshSmartManagerUI(); } catch (_) {}
 }
 
 // ---------- End of Day ----------
 function endOfDay(){
   S = FK.getState();
-  const k    = activeKey();
-  const prod = S.products[k];
-  const A    = S.autosim.aggregates || {sold:0,rev:0,cogs:0,N:0,C:0,W:0,Q:0};
+  const key = activeKey();
+  const prod = S.products[key];
+  const A = S.autosim.aggregates || { sold: 0, rev: 0, cogs: 0, N: 0, C: 0, W: 0, Q: 0 };
 
-  const stockLeft   = totalStock();
-  const holding     = stockLeft * 0.10;
-  const marketingCost = (S.marketing.socialToday?150:0) + ((S.marketing.flyerDaysLeft||0)>0 ? 80 : 0);
+  const managerState = FK.getAutoManagerState ? FK.getAutoManagerState() : null;
+  const plannedQty = managerState?.plan?.plannedQty || prod?.plannedQty || 0;
 
-  // payroll + mood via staff API
-  const complaints = Math.max(0, (A.N>0)? (1 - A.sold/Math.max(1, Math.round(A.N*A.C))) : 0);
-  const payroll    = FK.staffDailyTick ? FK.staffDailyTick({avgW:A.W||0, complaints}) : (FK.teamSummary()?.payroll||0);
+  const stockLeft = totalStock();
+  const holding = stockLeft * 0.10;
+  const marketingCost = (S.marketing?.socialToday ? 150 : 0) + ((S.marketing?.flyerDaysLeft || 0) > 0 ? 80 : 0);
 
-  const fixed  = 150;
-  const profit = (A.rev||0) - (A.cogs||0) - holding - marketingCost - fixed - payroll;
+  const complaints = Math.max(0, (A.N > 0) ? (1 - (A.sold || 0) / Math.max(1, Math.round(A.N * (A.C || 0)))) : 0);
+  const payroll = FK.staffDailyTick ? FK.staffDailyTick({ avgW: A.W || 0, complaints }) : (FK.teamSummary()?.payroll || 0);
+  const fixed = 150;
+  const profit = (A.rev || 0) - (A.cogs || 0) - holding - marketingCost - fixed - payroll;
 
-  // expirare stoc & perisabile
-  try{
-    const L = prod.shelfLifeDays||2;
-    (prod.stock||[]).forEach(l=> l.age = (l.age||0)+1);
-    prod.stock = (prod.stock||[]).filter(l=> (l.age||0) < L);
-    ['milk','strawberries'].forEach(id=>{
+  const softExpiration = S.safety?.softExpiration ?? S.economyFlags?.softExpiration ?? true;
+  if (softExpiration) {
+    try {
+      (prod.stock || []).forEach(lot => {
+        const loss = Math.ceil((lot.qty || 0) * 0.10);
+        lot.qty = Math.max(0, (lot.qty || 0) - loss);
+      });
+      prod.stock = (prod.stock || []).filter(lot => (lot.qty || 0) > 0);
+    } catch (_) {}
+  } else {
+    try {
+      const L = prod.shelfLifeDays || 2;
+      (prod.stock || []).forEach(lot => lot.age = (lot.age || 0) + 1);
+      prod.stock = (prod.stock || []).filter(lot => (lot.age || 0) < L);
+    } catch (_) {}
+  }
+  try {
+    ['milk', 'strawberries'].forEach(id => {
       const it = S.ingredients?.[id];
-      if(it && it.qty>0){ it.qty = Math.max(0, it.qty - Math.ceil(it.qty*0.20)); }
+      if (it && it.qty > 0) {
+        const loss = softExpiration ? Math.ceil(it.qty * 0.05) : Math.ceil(it.qty * 0.20);
+        it.qty = Math.max(0, it.qty - loss);
+      }
     });
-  }catch(_){}
+  } catch (_) {}
 
-  // reputație
-  const rho=ECON.rho;
-  const f = Math.max(0.80, Math.min(1.20, 0.9 + 0.25*((A.Q||0)-0.85) - 0.05*complaints));
-  S.reputation = Math.max(0.80, Math.min(1.20, rho*(S.reputation||1) + (1-rho)*f));
+  const rho = ECON.rho;
+  const f = Math.max(0.80, Math.min(1.20, 0.9 + 0.25 * ((A.Q || 0) - 0.85) - 0.05 * complaints));
+  S.reputation = Math.max(0.80, Math.min(1.20, rho * (S.reputation || 1) + (1 - rho) * f));
 
-  // raport
-  S.today = { report: { sold:A.sold||0, revenue:A.rev||0, cogs:A.cogs||0, holding, marketing:marketingCost, fixed, payroll, profit, Q:A.Q||0, W:A.W||0, C:A.C||0 } };
+  const summary = {
+    sold: A.sold || 0,
+    plannedQty,
+    revenue: A.rev || 0,
+    cogs: A.cogs || 0,
+    marketing: marketingCost,
+    payroll,
+    fixed,
+    profit,
+    avgQuality: A.Q || 0,
+    wait: A.W || 0,
+    conversion: A.C || 0,
+    leftover: stockLeft,
+    leftoverRatio: plannedQty > 0 ? stockLeft / plannedQty : 0
+  };
 
-  // marketing (consum)
-  if((S.marketing.flyerDaysLeft||0)>0) S.marketing.flyerDaysLeft--;
-  S.marketing.socialToday=false;
+  try { AutoManager.onEndOfDay(summary); } catch (err) { console.error('[AutoManager] onEndOfDay', err); }
 
-  // reset agregate
-  S.autosim.aggregates={sold:0,rev:0,cogs:0,holding:0,marketing:0,profit:0,N:0,C:0,W:0,Q:0};
+  S = FK.getState();
+  S.today = { report: { sold: summary.sold, revenue: summary.revenue, cogs: summary.cogs, holding, marketing: marketingCost, fixed, payroll, profit, Q: summary.avgQuality, W: summary.wait, C: summary.conversion } };
 
-  // avansează ziua în world & vreme
-  S.day = (S.day||1)+1;
-  S.timeMin = S.world?.open || 8*60;
-  S.world = S.world || {year:1,season:'primavara',day:S.day,minute:S.timeMin,open:8*60,close:8*60+DAY_MINUTES};
-  S.world.day = (S.world.day||1)+1;
-  if(S.world.day>28){ S.world.day=1; S.world.season = (S.world.season==='primavara'?'vara':S.world.season==='vara'?'toamna':S.world.season==='toamna'?'iarna':'primavara'); }
+  if ((S.marketing?.flyerDaysLeft || 0) > 0) S.marketing.flyerDaysLeft--;
+  S.marketing.socialToday = false;
+
+  try { FK.questEndOfDay && FK.questEndOfDay(A); } catch (_) {}
+
+  S.autosim.aggregates = { sold: 0, rev: 0, cogs: 0, holding: 0, marketing: 0, profit: 0, N: 0, C: 0, W: 0, Q: 0 };
+  S.autosim.producedToday = 0;
+  S.autosim._middayTriggered = false;
+  S.autosim._lowCashWarned = false;
+
+  S.day = (S.day || 1) + 1;
+  S.timeMin = S.world?.open || 8 * 60;
+  S.world = S.world || { year: 1, season: 'primavara', day: S.day, minute: S.timeMin, open: 8 * 60, close: 8 * 60 + DAY_MINUTES };
+  S.world.day = (S.world.day || 1) + 1;
+  if (S.world.day > 28) {
+    S.world.day = 1;
+    S.world.season = (S.world.season === 'primavara' ? 'vara' : S.world.season === 'vara' ? 'toamna' : S.world.season === 'toamna' ? 'iarna' : 'primavara');
+  }
   S.world.minute = S.world.open;
-  try{ FK.rollWeather && FK.rollWeather(S.world.season); }catch(_){}
-  try{ FK.questEndOfDay && FK.questEndOfDay(S.autosim.aggregates); }catch(_){}
+  try { FK.rollWeather && FK.rollWeather(S.world.season); } catch (_) {}
+  try { FK.questEndOfDay && FK.questEndOfDay(S.autosim.aggregates); } catch (_) {}
 
-  // persist & UI
   FK.setState(S);
-  refreshTop();
+  planNewDay();
 }
 
 // ---------- Control rulare ----------
@@ -414,6 +521,7 @@ function hydrateControls(){
 }
 function applyControlsToState(){
   S = FK.getState();
+  if (FK.getModes && FK.getModes().smartManager) return;
   const p = S.products[activeKey()];
   if(!p) return;
 
@@ -445,6 +553,7 @@ function applyControlsToState(){
 function mount(){
   refreshTop();
   hydrateControls();
+  try { initSmartManagerUI(); } catch (_) {}
 
   if(banCorner){ try{ banCorner.innerHTML=''; banCorner.appendChild(buildBanisorSprite(120)); }catch(_){ } }
   if(ticker) ticker.textContent='Auto-sim '+(FK.getState().autosim?.running? 'activ' : 'în pauză');
@@ -820,9 +929,11 @@ speedBtns.forEach(b=> b.addEventListener('click', ()=> setSpeed(Number(b.dataset
 document.getElementById('btn-import-manual')?.addEventListener('click', ()=> importFromManual(true));
 
 // ---------- Start ----------
+planNewDay();
 setPaused(false);
 loopStart();
 mount();
+try { hydrateControls(); refreshTop(); } catch (_) {}
 
 // ---------- Micro-tweaks post-mount ----------
 try{

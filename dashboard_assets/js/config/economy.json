@@ -1,0 +1,191 @@
+{
+  "meta": {
+    "version": 1,
+    "updated": "2025-09-21",
+    "notes": "Kid-mode friendly economy tuning"
+  },
+  "traffic": {
+    "baseCustomers": 120,
+    "seasonMultipliers": {
+      "primavara": 1.05,
+      "vara": 1.1,
+      "toamna": 0.95,
+      "iarna": 0.9
+    }
+  },
+  "difficulty": {
+    "easy": {
+      "safetyFactor": 1.2,
+      "targetConversion": 0.82,
+      "cashReserve": 0.15,
+      "voucherValue": 280,
+      "maxVoucherPerWeek": 1,
+      "topUpBatch": 18
+    },
+    "normal": {
+      "safetyFactor": 1.1,
+      "targetConversion": 0.78,
+      "cashReserve": 0.12,
+      "voucherValue": 220,
+      "maxVoucherPerWeek": 1,
+      "topUpBatch": 14
+    }
+  },
+  "pricing": {
+    "floorFactor": 0.9,
+    "ceilFactor": 1.05,
+    "soldOutBump": 0.05,
+    "leftoverCut": 0.05,
+    "maxDailyShift": {
+      "easy": 0.05,
+      "normal": 0.07
+    }
+  },
+  "production": {
+    "morningWindowMinutes": 120,
+    "middayCheckMinute": 240,
+    "lowStockThreshold": 0.25,
+    "topUpCap": 48,
+    "topUpBatch": 16
+  },
+  "staffing": {
+    "kidMode": {
+      "normalTraffic": 70,
+      "rapidTraffic": 110
+    },
+    "minCashiers": 1,
+    "maxCashiers": 2
+  },
+  "offline": {
+    "maxDays": 7
+  },
+  "ingredients": {
+    "flour": {
+      "price": 2.2,
+      "bulk": 20
+    },
+    "milk": {
+      "price": 1.8,
+      "bulk": 12
+    },
+    "sugar": {
+      "price": 1.5,
+      "bulk": 15
+    },
+    "cacao": {
+      "price": 2.5,
+      "bulk": 6
+    },
+    "chocolate_chips": {
+      "price": 2.7,
+      "bulk": 6
+    },
+    "strawberries": {
+      "price": 3.4,
+      "bulk": 8
+    },
+    "coconut": {
+      "price": 2.1,
+      "bulk": 6
+    },
+    "sprinkles": {
+      "price": 1.2,
+      "bulk": 6
+    },
+    "butter": {
+      "price": 2.8,
+      "bulk": 10
+    },
+    "eggs": {
+      "price": 2.3,
+      "bulk": 12
+    },
+    "yeast": {
+      "price": 1.4,
+      "bulk": 8
+    },
+    "vanilla": {
+      "price": 2.6,
+      "bulk": 6
+    },
+    "chocolate_glaze": {
+      "price": 2.9,
+      "bulk": 6
+    },
+    "cream": {
+      "price": 3.0,
+      "bulk": 6
+    },
+    "blueberries": {
+      "price": 3.2,
+      "bulk": 6
+    }
+  },
+  "products": {
+    "croissant": {
+      "favorite": true,
+      "basePrice": 10,
+      "plan": {
+        "easy": 120,
+        "normal": 100
+      },
+      "restockMultiplier": {
+        "min": 1.6,
+        "target": 2.3
+      },
+      "happyHour": {
+        "start": "16:00",
+        "end": "17:00",
+        "discount": 0.1
+      }
+    },
+    "donut": {
+      "basePrice": 9,
+      "plan": {
+        "easy": 110,
+        "normal": 90
+      },
+      "restockMultiplier": {
+        "min": 1.5,
+        "target": 2.1
+      },
+      "happyHour": {
+        "start": "15:00",
+        "end": "16:00",
+        "discount": 0.1
+      }
+    },
+    "eclair": {
+      "basePrice": 14,
+      "plan": {
+        "easy": 80,
+        "normal": 65
+      },
+      "restockMultiplier": {
+        "min": 1.4,
+        "target": 2.0
+      },
+      "happyHour": {
+        "start": "17:00",
+        "end": "18:00",
+        "discount": 0.1
+      }
+    },
+    "muffin": {
+      "basePrice": 8,
+      "plan": {
+        "easy": 130,
+        "normal": 110
+      },
+      "restockMultiplier": {
+        "min": 1.7,
+        "target": 2.4
+      },
+      "happyHour": {
+        "start": "10:00",
+        "end": "11:00",
+        "discount": 0.1
+      }
+    }
+  }
+}

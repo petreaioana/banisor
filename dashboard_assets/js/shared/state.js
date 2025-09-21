@@ -20,6 +20,78 @@ export const FK = (() => {
   // ---------- Utilitare interne ----------
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const DAY_MINUTES = 8 * 60;
+  const MAX_KIDS_HISTORY = 30;
+
+  function defaultModes() {
+    return { kidMode: true, smartManager: true, difficulty: \"easy\" };
+  }
+  function defaultPolicy() {
+    return {
+      autoProduce: true,
+      autoRestock: true,
+      autoPrice: true,
+      autoStaff: true,
+      autoEvents: true,
+      autoUpgrades: true,
+      focus: \"balanced\",
+      cashReserve: 0.15,
+      memory: { soldOutYesterday: false, leftoverYesterday: false, lastPriceDelta: 0 }
+    };
+  }
+  function defaultGoals() {
+    return { targetSold: 0, targetQ: 0.9, earnedStars: 0 };
+  }
+  function defaultRewards() {
+    return { badges: [], permaBuffs: [], streakGoodDays: 0, pendingBuff: null, lastVoucherDay: 0 };
+  }
+  function defaultSafety() {
+    return {
+      lowStockThreshold: 0.25,
+      restockTargetDays: 2,
+      minPlan: 20,
+      softExpiration: true,
+      minIngredientReserve: 4,
+      voucherCooldownDays: 7,
+      voucherValue: 250,
+      voucherRange: [180, 300],
+      morningWindowMinutes: 120,
+      middayCheckMinute: 240,
+      topUpCap: 48,
+      topUpBatch: 12,
+      planCeiling: 240,
+      restockMultipliers: { min: 1.6, target: 2.4 },
+      priorityIngredients: ['flour', 'sugar', 'butter', 'milk', 'eggs'],
+      ingredientBuffer: 0.2,
+      maxRestockOrders: 3,
+      staffing: { minCashiers: 1, maxCashiers: 2, kidMode: { normalTraffic: 70, rapidTraffic: 110 } },
+      lowCashTrigger: 0.1
+    };
+  }
+  function defaultKidsTelemetry() {
+    return { lastSummary: null, history: [] };
+  }
+  function defaultOffline() {
+    return { maxDays: 7, pendingSummary: null, lastSimulatedTs: Date.now() };
+  }
+  function defaultEconomyFlags() {
+    return { useWaitTime: false, softExpiration: true };
+  }
+  function ensureDefaults(current, factory) {
+    const base = factory();
+    if (!current || typeof current !== \"object\") return base;
+    return Object.assign(base, current);
+  }
+  function pushUnique(arr, item, key = \"id\") {
+    if (!Array.isArray(arr)) return [item];
+    const exists = arr.some(entry => {
+      if (key === null) return JSON.stringify(entry) === JSON.stringify(item);
+      return entry && item && entry[key] === item[key];
+    });
+    if (!exists) arr.push(item);
+    return arr;
+  }
+
+
 
   // LocalStorage chei pe slot
   const SLOT_KEYS = { A: 'fk_slot_A', B: 'fk_slot_B', C: 'fk_slot_C', autosave: 'fk_slot_autosave' };
@@ -41,7 +113,7 @@ export const FK = (() => {
 
     // lume & meta
     world: { year: 1, season: 'primavara', day: 1, minute: 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES },
-    meta: { lastSeenTs: Date.now(), slot: 'autosave' },
+    meta: { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } },
 
     // marketing & upgrade-uri
     marketing: { flyerDaysLeft: 0, socialToday: false },
@@ -187,6 +259,9 @@ export const FK = (() => {
   }
 
   let S = load();
+  ensureKidFriendlyStructures();
+  if (S.meta?.config?.economy) applyEconomyConfig(S.meta.config.economy, false);
+  if (S.meta?.config?.policies) applyPolicyConfig(S.meta.config.policies, false);
 
   // ---------- BroadcastChannel + fallback pe storage ----------
   let BC = null; try { BC = new BroadcastChannel(CHANNEL); } catch (_) { }
@@ -234,7 +309,7 @@ export const FK = (() => {
     }
     if (S.version < 5) {
       S.world = S.world || { year: 1, season: 'primavara', day: S.day || 1, minute: S.timeMin || 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES };
-      S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave' };
+      S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } };
       S.economy2 = S.economy2 || { competitorIndex: 1.00, weather: 'sunny' };
       // multi-produs & research sensibili la migrare
       if (!S.products) S.products = JSON.parse(JSON.stringify(DEF.products));
@@ -292,6 +367,8 @@ export const FK = (() => {
         localStorage.setItem(SLOT_KEYS[slot], JSON.stringify(S));
         localStorage.setItem('fk_active_slot', slot);
       } catch (_) { }
+      touchOfflineTimestamp(Date.now(), false);
+
       save(); emit('state:push', S);
       return true;
     } catch (e) { return false; }
@@ -325,6 +402,446 @@ export const FK = (() => {
     S.boost.buffs.forEach(b => b.minutesLeft -= minutes);
     S.boost.buffs = S.boost.buffs.filter(b => (b.minutesLeft || 0) > 0);
     aggregateBuffs(); save();
+  }
+
+
+  
+
+  
+  // ---------- Config loader ----------
+  function applyEconomyConfig(data, persist = true) {
+    if (!data || typeof data !== 'object') return null;
+    ensureKidFriendlyStructures();
+    S.meta = S.meta || {};
+    S.meta.config = S.meta.config || { economy: null, policies: null };
+    S.meta.config.economy = data;
+    const diff = (S.modes?.difficulty) || 'easy';
+    const diffCfg = data.difficulty && data.difficulty[diff];
+    if (diffCfg && typeof diffCfg === 'object') {
+      if (typeof diffCfg.cashReserve === 'number' && !Number.isNaN(diffCfg.cashReserve)) {
+        S.policy.cashReserve = clamp(diffCfg.cashReserve, 0, 0.6);
+      }
+      if (typeof diffCfg.safetyFactor === 'number' && !Number.isNaN(diffCfg.safetyFactor)) {
+        S.safety.safetyFactor = diffCfg.safetyFactor;
+      }
+      if (typeof diffCfg.targetConversion === 'number' && !Number.isNaN(diffCfg.targetConversion)) {
+        S.safety.targetConversion = diffCfg.targetConversion;
+      }
+      if (typeof diffCfg.voucherValue === 'number' && !Number.isNaN(diffCfg.voucherValue)) {
+        S.safety.voucherValue = diffCfg.voucherValue;
+      }
+      if (typeof diffCfg.topUpBatch === 'number' && !Number.isNaN(diffCfg.topUpBatch)) {
+        S.safety.topUpBatch = Math.max(4, Math.round(diffCfg.topUpBatch));
+      }
+    }
+    if (data.production && typeof data.production === 'object') {
+      if (typeof data.production.lowStockThreshold === 'number') {
+        S.safety.lowStockThreshold = clamp(data.production.lowStockThreshold, 0.1, 0.5);
+      }
+      if (typeof data.production.morningWindowMinutes === 'number') {
+        S.safety.morningWindowMinutes = Math.max(30, Math.round(data.production.morningWindowMinutes));
+      }
+      if (typeof data.production.middayCheckMinute === 'number') {
+        S.safety.middayCheckMinute = Math.max(60, Math.round(data.production.middayCheckMinute));
+      }
+      if (typeof data.production.topUpCap === 'number') {
+        S.safety.topUpCap = Math.max(4, Math.round(data.production.topUpCap));
+      }
+      if (typeof data.production.topUpBatch === 'number') {
+        S.safety.topUpBatch = Math.max(4, Math.round(data.production.topUpBatch));
+      }
+    }
+    if (data.staffing && typeof data.staffing === 'object') {
+      S.safety.staffing = Object.assign({}, S.safety.staffing || {}, data.staffing);
+      if (data.staffing.kidMode) {
+        S.safety.staffing.kidMode = Object.assign({}, S.safety.staffing.kidMode || {}, data.staffing.kidMode);
+      }
+    }
+    if (data.pricing && typeof data.pricing === 'object') {
+      S.safety.pricing = Object.assign({}, data.pricing);
+    }
+    if (data.offline && typeof data.offline.maxDays === 'number') {
+      S.offline.maxDays = Math.max(1, Math.min(14, Math.round(data.offline.maxDays)));
+    }
+    if (persist) {
+      save();
+      emit('config:economyApplied', { config: data, difficulty: diff });
+    }
+    return data;
+  }
+
+  async function loadEconomyConfig(url = 'dashboard_assets/js/config/economy.json') {
+    if (typeof fetch === 'undefined') return null;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      applyEconomyConfig(data, true);
+      return data;
+    } catch (err) {
+      console.error('Economy config load failed', err);
+      return null;
+    }
+  }
+
+  function getEconomyConfig() {
+    ensureKidFriendlyStructures();
+    return (S.meta?.config?.economy) || null;
+  }
+
+  function applyPolicyConfig(data, persist = true) {
+    if (!data || typeof data !== 'object') return null;
+    ensureKidFriendlyStructures();
+    S.meta = S.meta || {};
+    S.meta.config = S.meta.config || { economy: null, policies: null };
+    S.meta.config.policies = data;
+    if (data.production) {
+      if (typeof data.production.planFloor === 'number') {
+        S.safety.minPlan = Math.max(10, Math.round(data.production.planFloor));
+      }
+      if (typeof data.production.planCeiling === 'number') {
+        S.safety.planCeiling = Math.max(S.safety.minPlan || 10, Math.round(data.production.planCeiling));
+      }
+      if (data.production.focusBias) {
+        S.policy.focusBias = Object.assign({}, data.production.focusBias);
+      }
+    }
+    if (data.restock) {
+      if (typeof data.restock.minMultiplier === 'number') {
+        S.safety.restockMultipliers.min = Math.max(1, data.restock.minMultiplier);
+      }
+      if (typeof data.restock.targetMultiplier === 'number') {
+        S.safety.restockMultipliers.target = Math.max(S.safety.restockMultipliers.min || 1, data.restock.targetMultiplier);
+      }
+      if (Array.isArray(data.restock.priorityIngredients) && data.restock.priorityIngredients.length) {
+        S.safety.priorityIngredients = data.restock.priorityIngredients.slice(0, 12);
+      }
+      if (typeof data.restock.ingredientBuffer === 'number') {
+        S.safety.ingredientBuffer = Math.max(0, Math.min(0.5, data.restock.ingredientBuffer));
+      }
+      if (typeof data.restock.maxOrdersPerDay === 'number') {
+        S.safety.maxRestockOrders = Math.max(1, Math.round(data.restock.maxOrdersPerDay));
+      }
+    }
+    if (data.pricing) {
+      S.safety.pricing = Object.assign({}, S.safety.pricing || {}, data.pricing);
+    }
+    if (data.safety) {
+      if (typeof data.safety.lowCashTrigger === 'number') {
+        S.safety.lowCashTrigger = clamp(data.safety.lowCashTrigger, 0.05, 0.5);
+      }
+      if (Array.isArray(data.safety.voucherRange) && data.safety.voucherRange.length >= 2) {
+        S.safety.voucherRange = [Number(data.safety.voucherRange[0]), Number(data.safety.voucherRange[1])];
+      }
+      if (typeof data.safety.voucherCooldownDays === 'number') {
+        S.safety.voucherCooldownDays = Math.max(1, Math.round(data.safety.voucherCooldownDays));
+      }
+    }
+    if (data.upgrades) {
+      S.policy.upgradeRules = Object.assign({}, data.upgrades);
+    }
+    if (data.events) {
+      S.policy.eventRules = Object.assign({}, data.events);
+    }
+    if (data.rewards) {
+      S.policy.rewardRules = Object.assign({}, data.rewards);
+    }
+    if (data.offline && typeof data.offline.maxDays === 'number') {
+      S.offline.maxDays = Math.max(1, Math.min(14, Math.round(data.offline.maxDays)));
+    }
+    if (persist) {
+      save();
+      emit('config:policiesApplied', { config: data });
+    }
+    return data;
+  }
+
+  async function loadPolicyConfig(url = 'dashboard_assets/js/config/policies.json') {
+    if (typeof fetch === 'undefined') return null;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      applyPolicyConfig(data, true);
+      return data;
+    } catch (err) {
+      console.error('Policy config load failed', err);
+      return null;
+    }
+  }
+
+  function getPolicyConfig() {
+    ensureKidFriendlyStructures();
+    return (S.meta?.config?.policies) || null;
+  }
+
+
+
+  // ---------- Auto-Manager state helpers ----------
+  function getAutoManagerState() {
+    ensureKidFriendlyStructures();
+    if (!S.automanager || typeof S.automanager !== 'object') {
+      S.automanager = { plan: null, lastDay: null, memory: {} };
+    }
+    return S.automanager;
+  }
+
+  function setAutoManagerPlan(plan, persist = true) {
+    ensureKidFriendlyStructures();
+    if (!S.automanager || typeof S.automanager !== 'object') {
+      S.automanager = { plan: null, lastDay: null, memory: {} };
+    }
+    S.automanager.plan = plan ? Object.assign({ ts: Date.now() }, plan) : null;
+    if (persist) save();
+    return S.automanager.plan;
+  }
+
+  function updateAutoManagerMemory(patch = {}, persist = true) {
+    ensureKidFriendlyStructures();
+    if (!S.automanager || typeof S.automanager !== 'object') {
+      S.automanager = { plan: null, lastDay: null, memory: {} };
+    }
+    S.automanager.memory = Object.assign({}, S.automanager.memory || {}, patch);
+    if (persist) save();
+    return S.automanager.memory;
+  }
+
+  function recordAutoManagerDay(summary, persist = true) {
+    ensureKidFriendlyStructures();
+    if (!S.automanager || typeof S.automanager !== 'object') {
+      S.automanager = { plan: null, lastDay: null, memory: {} };
+    }
+    const entry = summary ? Object.assign({ ts: Date.now() }, summary) : null;
+    S.automanager.lastDay = entry;
+    if (!Array.isArray(S.automanager.history)) S.automanager.history = [];
+    if (entry) {
+      S.automanager.history.push(entry);
+      if (S.automanager.history.length > 14) {
+        S.automanager.history = S.automanager.history.slice(-14);
+      }
+    }
+    if (persist) save();
+    return entry;
+  }
+
+  // ---------- Kid mode & Smart Manager helpers ----------
+  function getModes() {
+    ensureKidFriendlyStructures();
+    return { ...S.modes };
+  }
+
+  function setKidMode(enabled) {
+    ensureKidFriendlyStructures();
+    S.modes.kidMode = !!enabled;
+    save(); emit('modes:kid', { enabled: S.modes.kidMode });
+    return S.modes.kidMode;
+  }
+
+  function setSmartManager(enabled) {
+    ensureKidFriendlyStructures();
+    S.modes.smartManager = !!enabled;
+    save(); emit('modes:smart', { enabled: S.modes.smartManager });
+    return S.modes.smartManager;
+  }
+
+  function setDifficulty(level) {
+    ensureKidFriendlyStructures();
+    const norm = (typeof level === 'string' && level.toLowerCase() === 'normal') ? 'normal' : 'easy';
+    if (S.modes.difficulty === norm) return norm;
+    S.modes.difficulty = norm;
+    if (S.meta?.config?.economy) applyEconomyConfig(S.meta.config.economy, false);
+    if (S.meta?.config?.policies) applyPolicyConfig(S.meta.config.policies, false);
+    save(); emit('modes:difficulty', { difficulty: norm });
+    return norm;
+  }
+
+  function getPolicy() {
+    ensureKidFriendlyStructures();
+    return { ...S.policy };
+  }
+
+  function updatePolicy(partial = {}) {
+    ensureKidFriendlyStructures();
+    if (partial.focus) {
+      const f = String(partial.focus).toLowerCase();
+      if (['balanced', 'profit', 'happy'].includes(f)) partial.focus = f;
+      else delete partial.focus;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, 'cashReserve')) {
+      const v = Number(partial.cashReserve);
+      if (!Number.isNaN(v)) partial.cashReserve = clamp(v, 0, 0.6);
+      else delete partial.cashReserve;
+    }
+    S.policy = Object.assign(ensureDefaults(S.policy, defaultPolicy), partial);
+    S.policy.memory = ensureDefaults(S.policy.memory, defaultPolicyMemory);
+    save(); emit('policy:updated', { policy: S.policy });
+    return S.policy;
+  }
+
+  function updatePolicyMemory(partial = {}) {
+    ensureKidFriendlyStructures();
+    S.policy.memory = ensureDefaults(S.policy.memory, defaultPolicyMemory);
+    Object.assign(S.policy.memory, partial);
+    save();
+    return S.policy.memory;
+  }
+
+  function getGoals() {
+    ensureKidFriendlyStructures();
+    return { ...S.goals };
+  }
+
+  function resetGoals() {
+    ensureKidFriendlyStructures();
+    S.goals = defaultGoals();
+    save();
+    return { ...S.goals };
+  }
+
+  function updateGoals(next = {}) {
+    ensureKidFriendlyStructures();
+    Object.assign(S.goals, next);
+    if (typeof S.goals.earnedStars !== 'number') S.goals.earnedStars = 0;
+    save(); emit('goals:updated', { goals: S.goals });
+    return S.goals;
+  }
+
+  function recordStars(count) {
+    ensureKidFriendlyStructures();
+    const stars = Math.max(0, Math.min(3, Math.round(Number(count) || 0)));
+    S.goals.earnedStars = stars;
+    save();
+    return stars;
+  }
+
+  function getRewards() {
+    ensureKidFriendlyStructures();
+    return { ...S.rewards, badges: [...S.rewards.badges], permaBuffs: [...S.rewards.permaBuffs] };
+  }
+
+  function updateRewards(partial = {}) {
+    ensureKidFriendlyStructures();
+    Object.assign(S.rewards, partial);
+    save();
+    return S.rewards;
+  }
+
+  function grantBadge(id, meta = {}) {
+    if (!id) return false;
+    ensureKidFriendlyStructures();
+    const entry = Object.assign({ id, earnedAt: Date.now() }, meta);
+    S.rewards.badges = pushUnique(S.rewards.badges, entry, 'id');
+    save(); emit('rewards:badge', { badge: entry });
+    return true;
+  }
+
+  function grantPermaBuff(buff) {
+    if (!buff || typeof buff !== 'object') return false;
+    ensureKidFriendlyStructures();
+    const entry = Object.assign({ id: buff.id || ('buff_' + Date.now()), grantedAt: Date.now() }, buff);
+    S.rewards.permaBuffs = pushUnique(S.rewards.permaBuffs, entry, 'id');
+    save(); emit('rewards:permaBuff', { buff: entry });
+    return entry;
+  }
+
+  function bumpGoodStreak(goodDay = true) {
+    ensureKidFriendlyStructures();
+    if (goodDay) S.rewards.streakGoodDays += 1;
+    else S.rewards.streakGoodDays = 0;
+    save();
+    return S.rewards.streakGoodDays;
+  }
+
+  function markSafetyVoucher(dayIndex, value) {
+    ensureKidFriendlyStructures();
+    S.rewards.lastVoucherDay = typeof dayIndex === 'number' ? dayIndex : (S.world?.day || 0);
+    S.rewards.lastVoucherValue = value ?? S.safety.voucherValue;
+    save();
+  }
+
+  function setPendingBuff(buff) {
+    ensureKidFriendlyStructures();
+    S.rewards.pendingBuff = buff || null;
+    save();
+  }
+
+  function consumePendingBuff() {
+    ensureKidFriendlyStructures();
+    const buff = S.rewards.pendingBuff || null;
+    S.rewards.pendingBuff = null;
+    save();
+    return buff;
+  }
+
+  function getSafety() {
+    ensureKidFriendlyStructures();
+    return { ...S.safety };
+  }
+
+  function updateSafety(partial = {}) {
+    ensureKidFriendlyStructures();
+    Object.assign(S.safety, partial);
+    save();
+    return S.safety;
+  }
+
+  function getKidsTelemetry() {
+    ensureKidFriendlyStructures();
+    return {
+      lastSummary: S.kidsTelemetry.lastSummary,
+      history: [...S.kidsTelemetry.history]
+    };
+  }
+
+  function recordKidsTelemetry(summary) {
+    ensureKidFriendlyStructures();
+    const entry = Object.assign({ ts: Date.now() }, summary || {});
+    S.kidsTelemetry.lastSummary = entry;
+    S.kidsTelemetry.history.push(entry);
+    if (S.kidsTelemetry.history.length > MAX_KIDS_HISTORY) {
+      S.kidsTelemetry.history = S.kidsTelemetry.history.slice(-MAX_KIDS_HISTORY);
+    }
+    save();
+    return entry;
+  }
+
+  function getOfflineSettings() {
+    ensureKidFriendlyStructures();
+    return { ...S.offline };
+  }
+
+  function setOfflineSummary(summary) {
+    ensureKidFriendlyStructures();
+    S.offline.pendingSummary = summary ? Object.assign({ ts: Date.now() }, summary) : null;
+    save();
+    return S.offline.pendingSummary;
+  }
+
+  function consumeOfflineSummary() {
+    ensureKidFriendlyStructures();
+    const summary = S.offline.pendingSummary || null;
+    S.offline.pendingSummary = null;
+    save();
+    return summary;
+  }
+
+  function touchOfflineTimestamp(ts, persist = true) {
+    ensureKidFriendlyStructures();
+    S.offline.lastSimulatedTs = ts || Date.now();
+    if (persist) save();
+    return S.offline.lastSimulatedTs;
+  }
+
+  function getEconomyFlags() {
+    ensureKidFriendlyStructures();
+    return { ...S.economyFlags };
+  }
+
+  function updateEconomyFlags(partial = {}) {
+    ensureKidFriendlyStructures();
+    Object.assign(S.economyFlags, partial);
+    save();
+    return S.economyFlags;
   }
 
   // ---------- Inventar / Rețete / Ingrediente ----------
@@ -617,7 +1134,31 @@ export const FK = (() => {
       // Heuristic: ~45 min reale ≈ 1 zi în joc; plafon 7 zile
       const daysToSim = Math.max(0, Math.min(7, Math.floor(realMin / 45)));
       if (daysToSim <= 0) return;
-      for (let i = 0; i < daysToSim; i++) { simulateOneDayAggregate(); }
+      const aggregate = { days: 0, sold: 0, revenue: 0, profit: 0, stars: 0 };
+      const starFor = (summary) => {
+        if (!summary || !summary.plannedQty) return 0;
+        const soldRatio = summary.plannedQty > 0 ? summary.sold / summary.plannedQty : 0;
+        let stars = 0;
+        if (soldRatio >= 0.6) stars = 1;
+        if (soldRatio >= 0.8 && (summary.avgQuality || 0) >= 0.9) stars = 2;
+        if (soldRatio >= 0.8 && (summary.profit || 0) > 0) stars = 3;
+        return stars;
+      };
+      for (let i = 0; i < daysToSim; i++) {
+        const summary = simulateOneDayAggregate();
+        if (summary) {
+          aggregate.days += 1;
+          aggregate.sold += summary.sold || 0;
+          aggregate.revenue += summary.revenue || 0;
+          aggregate.profit += summary.profit || 0;
+          aggregate.stars += starFor(summary);
+        }
+      }
+      if (aggregate.days > 0) {
+        setOfflineSummary({ days: aggregate.days, sold: aggregate.sold, revenue: aggregate.revenue, profit: aggregate.profit, stars: aggregate.stars });
+      }
+      touchOfflineTimestamp(Date.now(), false);
+
       save(); emit('state:push', S);
     } catch (_) { }
   }
@@ -707,6 +1248,9 @@ export const FK = (() => {
     S.world.minute = S.world.open;
     // rolăm vremea următoarei zile
     rollWeather(S.world.season);
+
+    const leftover = totalStock(key);
+    return { sold, revenue: rev, profit, avgQuality: Q, wait: W, conversion: C, leftover, plannedQty: plan };
   }
 
   // ---------- Save Slots API ----------
