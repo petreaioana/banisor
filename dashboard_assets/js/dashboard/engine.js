@@ -125,7 +125,7 @@ async function importFromManual(clearAfter = true){
       return;
     }
 
-    refreshTop();;
+    refreshTop();
     setMetrics({
       sold: (FK.getState().autosim?.aggregates?.sold || 0),
       rev:  (FK.getState().autosim?.aggregates?.rev  || 0)
@@ -531,6 +531,9 @@ function setPaused(paused){
   $$('#left-controls input, #left-controls select, #left-controls button').forEach(el => { el.disabled = !paused && el.id !== 'btn-rnd'; });
   updateTicker(paused ? 'Simulare in pauza' : 'Simulare activa');
   FK.setState(S);
+  if (!paused) {
+    try { ensureAutoSupplies(true); } catch (_) { }
+  }
 }
 function setSpeed(mult){
   S = FK.getState();
@@ -653,12 +656,72 @@ try{ if(elBoost) elBoost.addEventListener('click', openBuffsPopover); }catch(_){
 
 // ---------- Banisor sprite mic ----------
 function buildBanisorSprite(sizePx=120){
-  const wrap=document.createElement('div');
-  wrap.className='banisor-sprite'; wrap.style.width=sizePx+'px'; wrap.style.height=sizePx+'px';
-  wrap.innerHTML=`<svg viewBox="0 0 200 200" aria-label="Banisor" role="img"><ellipse cx="100" cy="185" rx="45" ry="10" fill="#d3b37a" opacity=".35"/><g fill="#f0a82a" stroke="#c67a12" stroke-width="4"><path d="M75 160 q-8 12 8 18 h18 q10-2 6-10 q-6-14-32-8z"/><path d="M127 160 q8 12-8 18 h-18 q-10-2-6-10 q6-14 32-8z"/></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6" class="hand-wave"><path d="M150 110 q25 5 25 25" fill="none"/><circle cx="175" cy="135" r="14" /><circle cx="165" cy="128" r="6" /><circle cx="184" cy="142" r="6" /></g><g fill="#f0a82a" stroke="#c67a12" stroke-width="6"><path d="M50 110 q-25 5 -25 25" fill="none"/><circle cx="25" cy="135" r="14" /><circle cx="35" cy="128" r="6" /><circle cx="16" cy="142" r="6" /></g><defs><radialGradient id="g1" cx="35%" cy="35%"><stop offset="0%" stop-color="#ffe58a"/><stop offset="60%" stop-color="#ffd053"/><stop offset="100%" stop-color="#f2a62b"/></radialGradient></defs><circle cx="100" cy="100" r="68" fill="url(#g1)" stroke="#c67a12" stroke-width="8"/><circle cx="100" cy="100" r="56" fill="none" stroke="#ffde82" stroke-width="10" opacity=".9"/></svg>`;
-  return wrap;
+  const fragment = document.createDocumentFragment();
+  const body = document.createElement('div');
+  body.className = 'ban-body';
+  body.style.width = `${sizePx}px`;
+  body.style.height = `${sizePx}px`;
+
+  const ring = document.createElement('div');
+  ring.className = 'ban-ring';
+  body.appendChild(ring);
+
+  const highlight = document.createElement('span');
+  highlight.className = 'ban-highlight';
+  body.appendChild(highlight);
+
+  const eyeLeft = document.createElement('span');
+  eyeLeft.className = 'ban-eye ban-eye-left';
+  body.appendChild(eyeLeft);
+
+  const eyeRight = document.createElement('span');
+  eyeRight.className = 'ban-eye ban-eye-right';
+  body.appendChild(eyeRight);
+
+  const browLeft = document.createElement('span');
+  browLeft.className = 'ban-brow ban-brow-left';
+  body.appendChild(browLeft);
+
+  const browRight = document.createElement('span');
+  browRight.className = 'ban-brow ban-brow-right';
+  body.appendChild(browRight);
+
+  const mouth = document.createElement('span');
+  mouth.className = 'ban-mouth';
+  body.appendChild(mouth);
+
+  const cheekLeft = document.createElement('span');
+  cheekLeft.className = 'ban-cheek ban-cheek-left';
+  body.appendChild(cheekLeft);
+
+  const cheekRight = document.createElement('span');
+  cheekRight.className = 'ban-cheek ban-cheek-right';
+  body.appendChild(cheekRight);
+
+  const sparkleLeft = document.createElement('span');
+  sparkleLeft.className = 'ban-sparkle ban-sparkle-left';
+  body.appendChild(sparkleLeft);
+
+  const sparkleRight = document.createElement('span');
+  sparkleRight.className = 'ban-sparkle ban-sparkle-right';
+  body.appendChild(sparkleRight);
+
+  const sparkleTop = document.createElement('span');
+  sparkleTop.className = 'ban-sparkle ban-sparkle-top';
+  body.appendChild(sparkleTop);
+
+  fragment.appendChild(body);
+
+  const shadow = document.createElement('div');
+  shadow.className = 'ban-shadow';
+  shadow.style.width = Math.round(sizePx * 0.75) + 'px';
+  shadow.style.height = Math.round(sizePx * 0.12) + 'px';
+  fragment.appendChild(shadow);
+
+  return fragment;
 }
 
+// ---------- Save Slots UI ----------
 // ---------- Save Slots UI ----------
 function mountSaveSlots(){
   const host=document.querySelector('#topbar .right'); if(!host) return;
@@ -1023,24 +1086,6 @@ mount();
 try{
   const t=document.getElementById('ticker'); if(t) t.textContent='Manager activ…';
   const st=document.querySelector('#stationbar .station.active'); if(st) st.textContent='Manager';
-}catch(_){}
-
-// ---------- Monkey-patch: tick buffs în stepAuto deja se cheamă ----------
-
-// ---------- Wrap addInventory respectând ingredientele (supliment de siguranță) ----------
-try{
-  const __origAddInventory = addInventory;
-  window.addInventory = function(qty,q){
-    try{
-      const Sx = FK.getState();
-      const k  = (FK.getActiveProductKey && FK.getActiveProductKey()) || 'croissant';
-      const rid = (Sx.products?.[k]?.recipeId)||'croissant_plain';
-      const need = (Sx.recipes?.[rid]?.ingredients)||{};
-      const maxByStoc = Object.keys(need).length>0 ? Math.min(...Object.entries(need).map(([kk,vv])=> Math.floor(((Sx.ingredients?.[kk]?.qty)||0)/Math.max(1,vv)))) : qty;
-      const made = Math.max(0, Math.min(qty, maxByStoc));
-      if(made>0){ FK.consumeFor(rid, made); __origAddInventory(made,q); }
-    }catch(e){ __origAddInventory(qty,q); }
-  };
 }catch(_){}
 
 // ---------- Done ----------

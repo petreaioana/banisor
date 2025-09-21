@@ -175,16 +175,7 @@ if (is_array($diskSeed)) {
     <main id="center" role="main" aria-label="Scenă magazin">
       <div id="scene" class="scene scene-shop">
         <div id="ticker" class="order-ticket">Auto-sim activ…</div>
-        <div id="banisor-corner" class="banisor-counter" aria-label="Mascota Banisor">
-          <div class="ban-body">
-            <span class="ban-eye ban-eye-left"></span>
-            <span class="ban-eye ban-eye-right"></span>
-            <span class="ban-mouth"></span>
-            <span class="ban-cheek ban-cheek-left"></span>
-            <span class="ban-cheek ban-cheek-right"></span>
-          </div>
-          <div class="ban-shadow"></div>
-        </div>
+        <div id="banisor-corner" class="banisor-counter" aria-label="Mascota Banisor"></div>
       </div>
     </main>
 

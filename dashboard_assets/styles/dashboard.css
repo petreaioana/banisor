@@ -1,4 +1,4 @@
-/* dashboard_assets/styles/dashboard.css */
+﻿/* dashboard_assets/styles/dashboard.css */
 /* =====================================================
    FinKids Tycoon — Dashboard (autosim)
    - layout 3 coloane
@@ -74,9 +74,29 @@ aside{
   width:120px;
   height:120px;
   border-radius:50%;
-  background:radial-gradient(circle at 35% 30%, #fff4b3 0%, #ffe066 45%, #f5c242 100%);
-  box-shadow:0 8px 18px rgba(0,0,0,.15);
+  background:radial-gradient(circle at 38% 30%, #fff7c8 0%, #ffe275 46%, #f5b53f 100%);
+  box-shadow:0 10px 22px rgba(0,0,0,.18);
   animation:ban-bob 3s ease-in-out infinite;
+  overflow:hidden;
+}
+.banisor-counter .ban-ring{
+  position:absolute;
+  inset:8%;
+  border:6px solid rgba(255,223,120,.55);
+  border-radius:50%;
+  box-shadow:0 0 14px rgba(255,220,120,.4);
+  z-index:0;
+}
+.banisor-counter .ban-highlight{
+  position:absolute;
+  top:22%;
+  left:20%;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:rgba(255,255,255,.5);
+  filter:blur(.4px);
+  z-index:1;
 }
 .banisor-counter .ban-eye{
   position:absolute;
@@ -84,11 +104,23 @@ aside{
   width:14px;
   height:18px;
   border-radius:50%;
-  background:#333;
-  box-shadow:0 4px 0 rgba(0,0,0,.1);
+  background:#212121;
+  box-shadow:0 4px 0 rgba(0,0,0,.12);
+  z-index:3;
 }
 .banisor-counter .ban-eye-left{ left:34%; }
 .banisor-counter .ban-eye-right{ right:34%; }
+.banisor-counter .ban-brow{
+  position:absolute;
+  top:32%;
+  width:24px;
+  height:6px;
+  border-radius:6px;
+  background:#2b2b2b;
+  z-index:3;
+}
+.banisor-counter .ban-brow-left{ left:26%; transform:rotate(-12deg); }
+.banisor-counter .ban-brow-right{ right:26%; transform:rotate(12deg); }
 .banisor-counter .ban-mouth{
   position:absolute;
   bottom:30%;
@@ -96,10 +128,12 @@ aside{
   width:42px;
   height:24px;
   margin-left:-21px;
-  border:4px solid #333;
+  border:4px solid #2f2015;
   border-top:none;
   border-radius:0 0 40px 40px/0 0 28px 28px;
-  background:#ffedd5;
+  background:linear-gradient(to bottom,#ffe7d5 0%,#f7c49e 100%);
+  box-shadow:0 2px 6px rgba(0,0,0,.12) inset;
+  z-index:3;
 }
 .banisor-counter .ban-cheek{
   position:absolute;
@@ -107,11 +141,25 @@ aside{
   width:24px;
   height:14px;
   border-radius:50%;
-  background:rgba(255,120,120,.35);
-  filter:blur(.4px);
+  background:rgba(255,133,133,.35);
+  filter:blur(.3px);
+  z-index:2;
 }
 .banisor-counter .ban-cheek-left{ left:16%; }
 .banisor-counter .ban-cheek-right{ right:16%; }
+.banisor-counter .ban-sparkle{
+  position:absolute;
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:rgba(255,255,255,.9);
+  box-shadow:0 0 12px rgba(255,255,255,.85);
+  animation:ban-spark 2.4s ease-in-out infinite;
+  z-index:4;
+}
+.banisor-counter .ban-sparkle-left{ top:28%; left:18%; animation-delay:.2s; }
+.banisor-counter .ban-sparkle-right{ top:30%; right:18%; animation-delay:.9s; }
+.banisor-counter .ban-sparkle-top{ top:14%; left:50%; margin-left:-6px; animation-delay:1.5s; }
 .banisor-counter .ban-shadow{
   width:90px;
   height:14px;
@@ -126,9 +174,12 @@ aside{
 }
 @keyframes ban-shadow{
   0%,100%{ transform:scale(1); opacity:.5; }
-  50%{ transform:scale(.9); opacity:.35; }
+  50%{ transform:scale(.88); opacity:.32; }
 }
-
+@keyframes ban-spark{
+  0%,100%{ transform:scale(.7); opacity:.45; }
+  50%{ transform:scale(1.3); opacity:1; }
+}
 /* Confetti overlay */
 .confetti-overlay{
   position:fixed;
