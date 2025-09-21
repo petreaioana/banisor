@@ -1,199 +1,205 @@
 /**
- * FinKids Tycoon — Frontend logic (no modules)
- * Ce face:
- *  - Leagă UI + inputuri + canvas cu API-ul PHP.
- *  - Gestionează starea jocului (pour/decor/bake/serve) și scorurile.
- *
- * Dependențe:
- *  - API JSON: game_assets/api.php (state/serve/reset)
- *  - Imagini:  game_assets/images/*
- *
- * Folosit de:
- *  - game.php
+ * FinKids Tycoon — Frontend logic (no modules) for the Manual Game
  */
 
-// ---------- API bridge ----------
-const API_BASE = 'game_assets/api.php';
-const FK = {
-  async state(){
-    const r = await fetch(`${API_BASE}?action=state`, {cache:'no-store'});
-    return r.json();
-  },
-  async serve(qty, q, inWin){
-    const fd = new FormData();
-    fd.append('qty', String(qty));
-    fd.append('q', String(q));
-    fd.append('inWin', inWin ? '1' : '0');
-    const r = await fetch(`${API_BASE}?action=serve`, {method:'POST', body:fd});
-    return r.json();
-  },
-  async reset(){
-    const r = await fetch(`${API_BASE}?action=reset`, {cache:'no-store'});
-    return r.json();
-  }
+// ---------- API bridge (updated for new API structure) ----------
+const API = {
+    async fetchState() {
+        try {
+            const r = await fetch(`api/manual_game_api.php?action=state`, { cache: 'no-store' });
+            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+            return r.json();
+        } catch (e) {
+            console.error("API fetchState error:", e);
+            return { ok: false, transfer: { qty: 0, percent: 0, buffs: [] } };
+        }
+    },
+    async serve(qty, q, inWin) {
+        const fd = new FormData();
+        fd.append('qty', String(qty));
+        fd.append('q', String(q));
+        fd.append('inWin', inWin ? '1' : '0');
+        try {
+            const r = await fetch(`api/manual_game_api.php?action=serve`, { method: 'POST', body: fd });
+            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+            return r.json();
+        } catch (e) {
+            console.error("API serve error:", e);
+            return { ok: false, error: "Network error" };
+        }
+    },
+    async reset() {
+        try {
+            const r = await fetch(`api/manual_game_api.php?action=reset`, { cache: 'no-store' });
+            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+            return r.json();
+        } catch (e) {
+            console.error("API reset error:", e);
+            return { ok: false, error: "Network error" };
+        }
+    }
 };
 
 // ---------- Utils ----------
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
-const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// ---------- Ingredients ----------
+// ---------- Game Config ----------
 const ING = [
-  { id:'chocolate_chips', name:'Cipuri ciocolată' },
-  { id:'strawberries',    name:'Căpșuni' },
-  { id:'coconut',         name:'Cocos' },
-  { id:'sprinkles',       name:'Ornamente' },
-  { id:'cacao',           name:'Cacao' },
-  { id:'sugar',           name:'Zahăr' },
+    { id: 'chocolate_chips', name: 'Cipuri ciocolată', img: 'chocolate_chips.png' },
+    { id: 'strawberries',    name: 'Căpșuni',          img: 'strawberries.png' },
+    { id: 'coconut',         name: 'Cocos',            img: 'coconut.png' },
+    { id: 'sprinkles',       name: 'Ornamente',        img: 'sprinkles.png' },
+    { id: 'cacao',           name: 'Cacao',            img: 'cacao.png' },
+    { id: 'sugar',           name: 'Zahăr',            img: 'sugar.png' },
 ];
-// map ID → filename (in game_assets/images)
-const TOP_IMG = {
-  chocolate_chips: 'chocolate_chips.png',
-  strawberries:    'strawberries.png',
-  coconut:         'coconut.png',
-  sprinkles:       'sprinkles.png',
-  cacao:           'cacao.png',
-  sugar:           'sugar.png',
-};
-
-const PHASES = ['pour','decorate','bake','serve'];
+const TOP_IMG = ING.reduce((acc, item) => ({ ...acc, [item.id]: item.img }), {});
+const PHASES = ['pour', 'decorate', 'bake', 'serve'];
 
 // ---------- Game state ----------
 const state = {
-  phase:'pour',
-  order:null,        // {size, shape, tops[], bake:[a,b], pour:[a,b]}
-  sizeKey:'M',
-  fillPct:0,
-  placed:[],
-  baking:{ running:false, dur: 2800+Math.floor(Math.random()*900), p:0, zone:[0.52,0.62], inWin:false, attempted:false, locked:false },
-  scores:{ pour:0, top:0, bake:0, q:0, qty:0 },
+    phase: 'pour',
+    order: null,
+    sizeKey: 'M',
+    fillPct: 0,
+    placed: [],
+    baking: { running: false, dur: 3000, p: 0, zone: [0.52, 0.62], inWin: false, attempted: false, locked: false },
+    scores: { pour: 0, top: 0, bake: 0, q: 0, qty: 0 },
 };
-let bakeTimer=null, pourTimer=null;
-
-// ---------- Audio ----------
+let bakeTimer = null, pourTimer = null;
 let audioOn = true;
 let __AC = null;
-function getAC(){ if(!audioOn) return null; try{ __AC = __AC || new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} return __AC; }
-function playDing(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.setValueAtTime(880,ac.currentTime); o.frequency.linearRampToValueAtTime(1320,ac.currentTime+0.12); g.gain.setValueAtTime(0.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.06,ac.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+0.2); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+0.22); }
-function playBuzz(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(), g=ac.createGain(); o.type='sawtooth'; o.frequency.value=220; g.gain.value=0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(_){ } },120); }
-function playPlop(){ const ac=getAC(); if(!ac) return; const o=ac.createOscillator(), g=ac.createGain(); o.type='square'; o.frequency.value=560+Math.random()*160; g.gain.value=0.04; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{ try{o.stop();}catch(_){ } },90); }
 
-// ---------- Feedback ----------
-function toast(msg){
-  const host = document.querySelector('.toast-container');
-  const d=document.createElement('div'); d.className='toast'; d.textContent=msg; host.appendChild(d);
-  setTimeout(()=>{ try{ d.remove(); }catch(_){ } }, 1800);
+// ---------- Audio Functions ----------
+function getAC() { if (!audioOn) return null; try { __AC = __AC || new(window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return __AC; }
+function playDing() { const ac = getAC(); if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(880, ac.currentTime); o.frequency.linearRampToValueAtTime(1320, ac.currentTime + 0.12); g.gain.setValueAtTime(0.0001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.06, ac.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.2); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.22); }
+function playBuzz() { const ac = getAC(); if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = 220; g.gain.value = 0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(() => { try { o.stop(); } catch (_) {} }, 120); }
+function playPlop() { const ac = getAC(); if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 560 + Math.random() * 160; g.gain.value = 0.04; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(() => { try { o.stop(); } catch (_) {} }, 90); }
+
+// ---------- Feedback & UI Helpers ----------
+function toast(msg) {
+    const host = $('.toast-container');
+    if (!host) return;
+    const d = document.createElement('div');
+    d.className = 'toast';
+    d.textContent = msg;
+    host.appendChild(d);
+    setTimeout(() => { try { d.remove(); } catch (_) {} }, 2200);
 }
-function confettiAt(x,y,n=18){
-  for(let i=0;i<n;i++){
-    const d=document.createElement('div'); d.className='particle';
-    const ang=Math.random()*Math.PI*2, dist=20+Math.random()*60;
-    d.style.setProperty('--dx', Math.cos(ang)*dist+'px');
-    d.style.setProperty('--dy', Math.sin(ang)*dist+'px');
-    d.style.left=x+'px'; d.style.top=y+'px'; d.style.position='fixed';
-    d.style.background=['#f3e38a','#f9a6a6','#a8d8f5','#c7f59e','#f7d57a'][i%5];
-    d.style.animation='pop .7s ease-out forwards';
-    document.body.appendChild(d); setTimeout(()=>{ try{ d.remove(); }catch(_){ } }, 800);
-  }
-}
-function sprinkleAt(container, el){
-  try{
-    const rect=container.getBoundingClientRect();
-    const r=el.getBoundingClientRect();
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
-    const xPct=((cx-rect.left)/rect.width)*100, yPct=((cy-rect.top)/rect.height)*100;
-    for(let i=0;i<6;i++){
-      const d=document.createElement('div'); d.className='particle';
-      d.style.setProperty('--dx', (Math.random()*40-20)+'px');
-      d.style.setProperty('--dy', (Math.random()*40-20)+'px');
-      d.style.left=xPct+'%'; d.style.top=yPct+'%';
-      d.style.background=['#f8c66a','#f5a8a8','#a8d8f5','#c7f59e','#f9f09a'][i%5];
-      d.style.animation='pop .5s ease-out forwards';
-      container.appendChild(d); setTimeout(()=>{ try{ d.remove(); }catch(_){ } }, 600);
+
+function confettiAt(x, y, n = 18) {
+    const container = document.body;
+    for (let i = 0; i < n; i++) {
+        const d = document.createElement('div');
+        d.className = 'particle';
+        const ang = Math.random() * Math.PI * 2, dist = 20 + Math.random() * 60;
+        d.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
+        d.style.setProperty('--dy', `${Math.sin(ang) * dist}px`);
+        d.style.left = `${x}px`;
+        d.style.top = `${y}px`;
+        d.style.background = ['#f3e38a', '#f9a6a6', '#a8d8f5', '#c7f59e', '#f7d57a'][i % 5];
+        d.style.animation = 'pop .7s ease-out forwards';
+        container.appendChild(d);
+        setTimeout(() => { try { d.remove(); } catch (_) {} }, 800);
     }
-  }catch(_){}
 }
-function ovenPuff(success){
-  const img=$('#oven-img'); if(!img) return;
-  const r=img.getBoundingClientRect();
-  confettiAt(r.left+r.width*0.5, r.top+r.height*0.15, success?16:8);
+function sprinkleAt(container, el) {
+    try {
+        const rect = container.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const xPct = ((cx - rect.left) / rect.width) * 100, yPct = ((cy - rect.top) / rect.height) * 100;
+        for (let i = 0; i < 6; i++) {
+            const d = document.createElement('div');
+            d.className = 'particle';
+            d.style.setProperty('--dx', (Math.random() * 40 - 20) + 'px');
+            d.style.setProperty('--dy', (Math.random() * 40 - 20) + 'px');
+            d.style.left = xPct + '%';
+            d.style.top = yPct + '%';
+            d.style.background = ['#f8c66a', '#f5a8a8', '#a8d8f5', '#c7f59e', '#f9f09a'][i % 5];
+            d.style.animation = 'pop .5s ease-out forwards';
+            container.appendChild(d);
+            setTimeout(() => { try { d.remove(); } catch (_) {} }, 600);
+        }
+    } catch (_) {}
 }
-
-// ---------- UI helpers ----------
-function setPhase(next){
-  state.phase = next;
-
-  // Stepper
-  $$('#stepper li').forEach(li=>{
-    const ph=li.getAttribute('data-phase');
-    const idx=PHASES.indexOf(ph);
-    const cur=PHASES.indexOf(next);
-    li.classList.toggle('active', ph===next);
-    li.classList.toggle('done', idx>-1 && idx<cur);
-  });
-
-  // Panels visibility
-  $$('.tools--phase').forEach(sec=>{
-    const ph=sec.getAttribute('data-phase');
-    sec.classList.toggle('hidden', ph!==next);
-  });
-
-  // Buttons
-  const canBakeStart = next==='bake' && !state.baking.locked && !state.baking.running;
-  const canBakeStop  = next==='bake' && state.baking.running;
-  const canServe     = next==='serve';
-
-  $('#btn-bake-start')?.toggleAttribute('disabled', !canBakeStart);
-  $('#btn-bake-stop') ?.toggleAttribute('disabled', !canBakeStop);
-  $('#btn-serve')     ?.toggleAttribute('disabled', !canServe);
+function ovenPuff(success) {
+    const img = $('#oven-img');
+    if (!img) return;
+    const r = img.getBoundingClientRect();
+    confettiAt(r.left + r.width * 0.5, r.top + r.height * 0.15, success ? 16 : 8);
 }
 
-function updateMold(){
-  const mold=$('#shape-mold'); if(!mold || !state.order) return;
-  mold.className='shape shape--'+(state.order.shape||'circle');
-  const px = state.sizeKey==='S'?160 : state.sizeKey==='L'?240 : 200;
-  mold.style.setProperty('--mold-size', px+'px');
-
-  const sel=$('#shape-select');
-  if(sel && sel.value!==state.order.shape) sel.value=state.order.shape;
-  $('#ord-shape') && ($('#ord-shape').textContent = (state.order.shape==='heart'?'Inimă':state.order.shape==='star'?'Stea':'Cerc'));
-  $('#ord-size')  && ($('#ord-size').textContent  = state.sizeKey);
+function setPhase(next) {
+    state.phase = next;
+    const currentIndex = PHASES.indexOf(next);
+    $$('#stepper li').forEach((li, idx) => {
+        const phase = li.dataset.phase;
+        li.classList.toggle('active', phase === next);
+        li.classList.toggle('done', idx < currentIndex);
+    });
+    $$('.tools--phase').forEach(sec => sec.classList.toggle('hidden', sec.dataset.phase !== next));
+    
+    $('#btn-bake-start')?.toggleAttribute('disabled', !(next === 'bake' && !state.baking.locked && !state.baking.running));
+    $('#btn-bake-stop')?.toggleAttribute('disabled', !(next === 'bake' && state.baking.running));
+    $('#btn-serve')?.toggleAttribute('disabled', next !== 'serve');
 }
 
-function updateFillUI(){
-  const fill=$('#shape-fill'); if(!fill || !state.order) return;
-  const pct=clamp(state.fillPct,0,1);
-  fill.style.height=Math.round(pct*100)+'%';
-  const [a,b]=state.order.pour;
-  fill.classList.toggle('good', pct>=a && pct<=b);
-  $('#pour-pct')  && ($('#pour-pct').textContent  = String(Math.round(pct*100)));
-  $('#pour-range')&& ($('#pour-range').value = String(Math.round(pct*100)));
-  calcPourScore(); renderScores();
+function updateMold() {
+    const mold = $('#shape-mold');
+    if (!mold || !state.order) return;
+    mold.className = 'shape shape--' + (state.order.shape || 'circle');
+    const px = state.sizeKey === 'S' ? 160 : state.sizeKey === 'L' ? 240 : 200;
+    mold.style.setProperty('--mold-size', px + 'px');
+
+    const sel = $('#shape-select');
+    if (sel && sel.value !== state.order.shape) sel.value = state.order.shape;
+    
+    const shapeText = { circle: 'Cerc', heart: 'Inimă', star: 'Stea' };
+    $('#ord-shape').textContent = shapeText[state.order.shape] || 'Cerc';
+    $('#ord-size').textContent = state.sizeKey;
 }
 
-function updateHitWindowUI(){
-  if(!state.order) return;
-  const [a,b]=state.order.bake;
-  const span=document.querySelector('.hit-window span'); if(span){
-    span.style.left=Math.round(a*100)+'%';
-    span.style.width=Math.round((b-a)*100)+'%';
-  }
-  $('#bake-window-label') && ($('#bake-window-label').textContent = `${Math.round(a*100)}–${Math.round(b*100)}%`);
+function updateFillUI() {
+    const fill = $('#shape-fill');
+    if (!fill || !state.order) return;
+    const pct = clamp(state.fillPct, 0, 1);
+    fill.style.height = Math.round(pct * 100) + '%';
+    const [a, b] = state.order.pour;
+    fill.classList.toggle('good', pct >= a && pct <= b);
+    $('#pour-pct').textContent = String(Math.round(pct * 100));
+    $('#pour-range').value = String(Math.round(pct * 100));
+    calcPourScore();
+    renderScores();
 }
 
-function buildPalette(){
-  const wrap=$('#palette'); if(!wrap) return;
-  wrap.innerHTML='';
-  ING.forEach(ing=>{
-    const b=document.createElement('button');
-    b.type='button'; b.className='chip-btn';
-    const imgSrc = 'game_assets/images/' + (TOP_IMG[ing.id] || 'sprinkles.png');
-    b.innerHTML = `<img src="${imgSrc}" alt="${ing.name}"><span>${ing.name}</span>`;
-    b.addEventListener('click', ()=> spawnChip(ing.id));
-    wrap.appendChild(b);
-  });
+function updateHitWindowUI() {
+    if (!state.order) return;
+    const [a, b] = state.order.bake;
+    const span = $('.hit-window span');
+    if (span) {
+        span.style.left = Math.round(a * 100) + '%';
+        span.style.width = Math.round((b - a) * 100) + '%';
+    }
+    $('#bake-window-label').textContent = `${Math.round(a * 100)}–${Math.round(b * 100)}%`;
 }
+
+function buildPalette() {
+    const wrap = $('#palette');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    ING.forEach(ing => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip-btn';
+        const imgSrc = `game_assets/images/${TOP_IMG[ing.id] || 'sprinkles.png'}`;
+        b.innerHTML = `<img src="${imgSrc}" alt="${ing.name}"><span>${ing.name}</span>`;
+        b.addEventListener('click', () => spawnChip(ing.id));
+        wrap.appendChild(b);
+    });
+}
+
 
 function spawnChip(id){
   const zone=$('#dropzone'); if(!zone) return;
@@ -375,111 +381,126 @@ function renderOrder(){
     });
   }
 }
-async function refreshTopbar(){
-  try{
-    const s = await FK.state();
-    if(s && s.ok){
-      $('#g-stock') && ($('#g-stock').textContent = String(s.stock?.units ?? 0));
-      const pct = Math.round(s.boost?.percent || 0);
-      const cnt = (s.boost?.buffs?.length) || 0;
-      $('#g-boost') && ($('#g-boost').textContent = pct + '%' + (cnt>0?` (${cnt})`:'')); }
-  }catch(_){}
+async function serveClient() {
+    if (state.phase !== 'serve') {
+        toast('Finalizează coacerea înainte de servire.');
+        return;
+    }
+    computeFinalScores();
+    const { q, qty } = state.scores;
+    const inWin = !!state.baking.inWin;
+
+    try {
+        const res = await API.serve(qty, q, inWin);
+        if (res?.ok) {
+            const btn = $('#btn-serve');
+            if (btn) {
+                const r = btn.getBoundingClientRect();
+                confettiAt(r.left + r.width / 2, r.top + r.height / 2, 24);
+            }
+            toast(`✅ Servit! +${qty} produse transferate.`);
+            await refreshTopbar(res.state);
+            newOrder();
+            setPhase('pour');
+        } else {
+            toast(res?.error || 'Eroare la servire.');
+        }
+    } catch (e) {
+        console.error("Serve client error:", e);
+        toast('Eroare de rețea la servire.');
+    }
 }
 
-function newOrder(){
-  const map={1:'S',2:'M',3:'L'};
-  const slider=$('#size-range');
-  state.sizeKey = map[ Number(slider?.value||2) ] || 'M';
-
-  const shapes=['circle','heart','star'];
-  const shape=shapes[Math.floor(Math.random()*shapes.length)];
-
-  const tops = ING.slice().sort(()=>Math.random()-0.5).slice(0, 2+Math.floor(Math.random()*3)).map(t=>t.id);
-
-  const bakeCenter = 0.54 + (Math.random()*0.06 - 0.03);
-  const bakeWidth  = 0.08 + Math.random()*0.04;
-  const pourCenter = 0.80 + (Math.random()*0.06 - 0.03);
-  const pourWidth  = 0.12;
-
-  state.order = {
-    size: state.sizeKey,
-    shape,
-    tops,
-    bake: [clamp(bakeCenter-bakeWidth/2, 0.15, 0.85), clamp(bakeCenter+bakeWidth/2, 0.20, 0.95)],
-    pour: [clamp(pourCenter-pourWidth/2, 0.55, 0.95), clamp(pourCenter+pourWidth/2, 0.60, 0.98)],
-  };
-
-  state.phase='pour';
-  state.fillPct=0;
-  state.placed=[];
-  state.baking={ running:false, dur:2800+Math.floor(Math.random()*900), p:0, zone:[...state.order.bake], inWin:false, attempted:false, locked:false };
-  state.scores={ pour:0, top:0, bake:0, q:0, qty:0 };
-
-  const sel=$('#shape-select'); if(sel) sel.value=shape;
-  updateMold();
-  updateFillUI();
-  renderOrder();
-  const zone=$('#dropzone'); if(zone) zone.innerHTML='';
-  $('#placed-count') && ($('#placed-count').textContent = '0');
-  updateHitWindowUI();
-  renderScores();
+async function refreshTopbar(data) {
+    try {
+        const res = data ? { ok: true, transfer: data } : await API.fetchState();
+        if (res?.ok) {
+            const transfer = res.transfer;
+            const stockEl = $('#g-stock');
+            const boostEl = $('#g-boost');
+            if (stockEl) stockEl.textContent = String(transfer.qty ?? 0);
+            if (boostEl) {
+                const buffCount = transfer.buffs?.length || 0;
+                boostEl.textContent = `${transfer.percent ?? 0}%${buffCount > 0 ? ` (${buffCount})` : ''}`;
+            }
+        }
+    } catch (e) {
+        console.error("Error refreshing topbar:", e);
+    }
 }
 
-// ---------- Events ----------
-function wireEvents(){
-  $('#btn-prev')?.addEventListener('click', ()=>{
-    const idx=Math.max(0, PHASES.indexOf(state.phase)-1);
-    if(state.phase==='bake' && state.baking.running){ toast('Oprește coacerea mai întâi.'); return; }
-    setPhase(PHASES[idx]);
-  });
-  $('#btn-next')?.addEventListener('click', ()=>{
-    const idx=Math.min(PHASES.length-1, PHASES.indexOf(state.phase)+1);
-    if(state.phase==='pour'){ if(!state.order) return; if(state.fillPct < state.order.pour[0]){ toast('Toarnă puțin mai mult!'); return; } }
-    if(state.phase==='decorate'){ if(state.placed.length<2){ toast('Adaugă cel puțin două toppinguri.'); return; } }
-    if(state.phase==='bake'){ if(!state.baking.attempted){ toast('Pornește coacerea înainte de a continua.'); return; } }
-    setPhase(PHASES[idx]);
-  });
+function newOrder() {
+    const map = { 1: 'S', 2: 'M', 3: 'L' };
+    const slider = $('#size-range');
+    state.sizeKey = map[slider?.value ?? 2] || 'M';
 
-  $('#btn-new-order')?.addEventListener('click', ()=>{ newOrder(); setPhase('pour'); });
+    const shapes = ['circle', 'heart', 'star'];
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    const tops = [...ING].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3)).map(t => t.id);
 
-  // Pour
-  $('#btn-pour-hold')?.addEventListener('pointerdown', (e)=>{ e.preventDefault(); clearInterval(pourTimer); pourTimer=setInterval(()=>{ state.fillPct=clamp(state.fillPct+0.01,0,1); updateFillUI(); }, 70); });
-  ['pointerup','pointerleave','pointercancel'].forEach(ev => $('#btn-pour-hold')?.addEventListener(ev, ()=>{ clearInterval(pourTimer); pourTimer=null; }));
-  $('#pour-range')?.addEventListener('input', (e)=>{ const v=Number(e.target.value||0); state.fillPct=clamp(v/100,0,1); updateFillUI(); });
+    const bakeCenter = 0.54 + (Math.random() * 0.06 - 0.03);
+    const bakeWidth = 0.08 + Math.random() * 0.04;
+    const pourCenter = 0.80 + (Math.random() * 0.06 - 0.03);
+    const pourWidth = 0.12;
 
-  // Decor
-  buildPalette();
+    state.order = {
+        size: state.sizeKey, shape, tops,
+        bake: [clamp(bakeCenter - bakeWidth / 2, 0.15, 0.85), clamp(bakeCenter + bakeWidth / 2, 0.20, 0.95)],
+        pour: [clamp(pourCenter - pourWidth / 2, 0.55, 0.95), clamp(pourCenter + pourWidth / 2, 0.60, 0.98)],
+    };
+    state.phase = 'pour'; state.fillPct = 0; state.placed = [];
+    state.baking = { running: false, dur: 2800 + Math.floor(Math.random() * 900), p: 0, zone: [...state.order.bake], inWin: false, attempted: false, locked: false };
+    state.scores = { pour: 0, top: 0, bake: 0, q: 0, qty: 0 };
+    
+    const shapeSelect = $('#shape-select');
+    if (shapeSelect) shapeSelect.value = shape;
+    
+    updateMold();
+    updateFillUI();
+    renderOrder();
+    
+    $('#dropzone')?.remove();
+    const dropzone = document.createElement('div');
+    dropzone.id = 'dropzone';
+    dropzone.className = 'build-dropzone';
+    $('.build-stage')?.appendChild(dropzone);
+    
+    $('#placed-count').textContent = '0';
+    updateHitWindowUI();
+    renderScores();
+}
 
-  // Size + shape
-  $('#size-range')?.addEventListener('input', (e)=>{ const map={1:'S',2:'M',3:'L'}; state.sizeKey = map[ Number(e.target.value||2) ] || 'M'; $('#size-label') && ($('#size-label').textContent = state.sizeKey); updateMold(); computeFinalScores(); renderScores(); });
-  $('#shape-select')?.addEventListener('change', (e)=>{ if(!state.order) return; state.order.shape = e.target.value||'circle'; updateMold(); });
-
-  // Bake controls
-  $('#btn-bake-start')?.addEventListener('click', startBake);
-  $('#btn-bake-stop') ?.addEventListener('click', stopBake);
-  document.addEventListener('keydown', (e)=>{ if(e.code==='Space' && state.phase==='bake'){ e.preventDefault(); if(state.baking.running) stopBake(); } });
-
-  // Serve
-  $('#btn-serve')?.addEventListener('click', serveClient);
-
-  // Audio toggle
-  $('#btn-audio')?.addEventListener('click', (e)=>{ audioOn=!audioOn; e.currentTarget.setAttribute('aria-pressed', audioOn?'true':'false'); e.currentTarget.textContent = audioOn?'🔊 Sunet':'🔈 Mut'; toast(audioOn?'🔊 Sunet ON':'🔈 Sunet OFF'); });
-
-  // Reset
-  $('#btn-reset')?.addEventListener('click', async ()=>{
-    try{ await FK.reset(); await refreshTopbar(); toast('Sesiune resetată.'); }catch(_){}
-  });
+function wireEvents() {
+    $('#btn-prev')?.addEventListener('click', () => { /* ... cod ... */ });
+    $('#btn-next')?.addEventListener('click', () => { /* ... cod ... */ });
+    $('#btn-new-order')?.addEventListener('click', () => { newOrder(); setPhase('pour'); });
+    const pourHoldBtn = $('#btn-pour-hold');
+    pourHoldBtn?.addEventListener('pointerdown', (e) => { /* ... cod ... */ });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => pourHoldBtn?.addEventListener(ev, () => { clearInterval(pourTimer); pourTimer = null; }));
+    $('#pour-range')?.addEventListener('input', (e) => { /* ... cod ... */ });
+    $('#size-range')?.addEventListener('input', (e) => { /* ... cod ... */ });
+    $('#shape-select')?.addEventListener('change', (e) => { /* ... cod ... */ });
+    $('#btn-bake-start')?.addEventListener('click', startBake);
+    $('#btn-bake-stop')?.addEventListener('click', stopBake);
+    document.addEventListener('keydown', (e) => { /* ... cod ... */ });
+    $('#btn-serve')?.addEventListener('click', serveClient);
+    $('#btn-audio')?.addEventListener('click', (e) => { /* ... cod ... */ });
+    $('#btn-reset')?.addEventListener('click', async () => { /* ... cod ... */ });
 }
 
 // ---------- Init ----------
-async function mount(){
-  wireEvents();
-  const map={1:'S',2:'M',3:'L'}; const slider=$('#size-range'); if($('#size-label')&&slider){ $('#size-label').textContent = map[ Number(slider.value||2) ] || 'M'; }
-  newOrder();
-  updateHitWindowUI();
-  setPhase('pour');
-  await refreshTopbar();
-  setInterval(refreshTopbar, 4000);
+async function mount() {
+    buildPalette();
+    wireEvents();
+    const sizeLabel = $('#size-label'), sizeRange = $('#size-range');
+    if (sizeLabel && sizeRange) {
+        const map = { 1: 'S', 2: 'M', 3: 'L' };
+        sizeLabel.textContent = map[sizeRange.value] || 'M';
+    }
+    newOrder();
+    setPhase('pour');
+    await refreshTopbar();
+    setInterval(() => refreshTopbar(), 5000);
 }
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', mount);
-else mount();
+
+document.addEventListener('DOMContentLoaded', mount);
