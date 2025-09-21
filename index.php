@@ -175,7 +175,7 @@ if (is_array($diskSeed)) {
     <main id="center" role="main" aria-label="Scenă magazin">
       <div id="scene" class="scene scene-shop">
         <div id="ticker" class="order-ticket">Auto-sim activ…</div>
-        <div id="banisor-corner" class="banisor-counter" aria-label="Mascota Banisor"></div>
+        <div id="banisor-corner" class="banisor-counter"></div>
       </div>
     </main>
 

@@ -1,4 +1,4 @@
-﻿/* dashboard_assets/styles/dashboard.css */
+/* dashboard_assets/styles/dashboard.css */
 /* =====================================================
    FinKids Tycoon — Dashboard (autosim)
    - layout 3 coloane
@@ -55,169 +55,12 @@ aside{
   box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
 
-/* Banisor mascot */
+/* Banisor (sprite în colț) */
 .banisor-counter{
   position:absolute;
   bottom:1rem;
   left:1rem;
-  width:140px;
-  height:160px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:.4rem;
-  pointer-events:none;
-  user-select:none;
-}
-.banisor-counter .ban-body{
-  position:relative;
-  width:120px;
-  height:120px;
-  border-radius:50%;
-  background:radial-gradient(circle at 38% 30%, #fff7c8 0%, #ffe275 46%, #f5b53f 100%);
-  box-shadow:0 10px 22px rgba(0,0,0,.18);
-  animation:ban-bob 3s ease-in-out infinite;
-  overflow:hidden;
-}
-.banisor-counter .ban-ring{
-  position:absolute;
-  inset:8%;
-  border:6px solid rgba(255,223,120,.55);
-  border-radius:50%;
-  box-shadow:0 0 14px rgba(255,220,120,.4);
-  z-index:0;
-}
-.banisor-counter .ban-highlight{
-  position:absolute;
-  top:22%;
-  left:20%;
-  width:26px;
-  height:26px;
-  border-radius:50%;
-  background:rgba(255,255,255,.5);
-  filter:blur(.4px);
-  z-index:1;
-}
-.banisor-counter .ban-eye{
-  position:absolute;
-  top:42%;
-  width:14px;
-  height:18px;
-  border-radius:50%;
-  background:#212121;
-  box-shadow:0 4px 0 rgba(0,0,0,.12);
-  z-index:3;
-}
-.banisor-counter .ban-eye-left{ left:34%; }
-.banisor-counter .ban-eye-right{ right:34%; }
-.banisor-counter .ban-brow{
-  position:absolute;
-  top:32%;
-  width:24px;
-  height:6px;
-  border-radius:6px;
-  background:#2b2b2b;
-  z-index:3;
-}
-.banisor-counter .ban-brow-left{ left:26%; transform:rotate(-12deg); }
-.banisor-counter .ban-brow-right{ right:26%; transform:rotate(12deg); }
-.banisor-counter .ban-mouth{
-  position:absolute;
-  bottom:30%;
-  left:50%;
-  width:42px;
-  height:24px;
-  margin-left:-21px;
-  border:4px solid #2f2015;
-  border-top:none;
-  border-radius:0 0 40px 40px/0 0 28px 28px;
-  background:linear-gradient(to bottom,#ffe7d5 0%,#f7c49e 100%);
-  box-shadow:0 2px 6px rgba(0,0,0,.12) inset;
-  z-index:3;
-}
-.banisor-counter .ban-cheek{
-  position:absolute;
-  top:58%;
-  width:24px;
-  height:14px;
-  border-radius:50%;
-  background:rgba(255,133,133,.35);
-  filter:blur(.3px);
-  z-index:2;
-}
-.banisor-counter .ban-cheek-left{ left:16%; }
-.banisor-counter .ban-cheek-right{ right:16%; }
-.banisor-counter .ban-sparkle{
-  position:absolute;
-  width:12px;
-  height:12px;
-  border-radius:50%;
-  background:rgba(255,255,255,.9);
-  box-shadow:0 0 12px rgba(255,255,255,.85);
-  animation:ban-spark 2.4s ease-in-out infinite;
-  z-index:4;
-}
-.banisor-counter .ban-sparkle-left{ top:28%; left:18%; animation-delay:.2s; }
-.banisor-counter .ban-sparkle-right{ top:30%; right:18%; animation-delay:.9s; }
-.banisor-counter .ban-sparkle-top{ top:14%; left:50%; margin-left:-6px; animation-delay:1.5s; }
-.banisor-counter .ban-shadow{
-  width:90px;
-  height:14px;
-  border-radius:50%;
-  background:rgba(0,0,0,.18);
-  filter:blur(2px);
-  animation:ban-shadow 3s ease-in-out infinite;
-}
-@keyframes ban-bob{
-  0%,100%{ transform:translateY(0); }
-  50%{ transform:translateY(-6px); }
-}
-@keyframes ban-shadow{
-  0%,100%{ transform:scale(1); opacity:.5; }
-  50%{ transform:scale(.88); opacity:.32; }
-}
-@keyframes ban-spark{
-  0%,100%{ transform:scale(.7); opacity:.45; }
-  50%{ transform:scale(1.3); opacity:1; }
-}
-/* Confetti overlay */
-.confetti-overlay{
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  overflow:hidden;
-  opacity:0;
-  transition:opacity .2s ease-out;
-  z-index:99999;
-}
-.confetti-overlay.show{ opacity:1; }
-.confetti-overlay.hide{ opacity:0; transition:opacity .35s ease-in .1s; }
-.confetti-piece{
-  position:absolute;
-  width:10px;
-  height:16px;
-  border-radius:2px;
-  transform:translate3d(0,-120vh,0);
-  animation:confetti-fall var(--dur,1.3s) linear forwards;
-}
-.confetti-message{
-  position:absolute;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  font:700 1.8rem/1 'Segoe UI', Arial, sans-serif;
-  color:#2f2f2f;
-  text-shadow:0 2px 4px rgba(255,255,255,.8);
-  opacity:0;
-  animation:confetti-msg .8s ease forwards;
-}
-@keyframes confetti-fall{
-  to{ transform:translate3d(var(--dx,0px),110vh,0) rotate(540deg); opacity:0; }
-}
-@keyframes confetti-msg{
-  0%{ opacity:0; transform:translate(-50%,-40%); }
-  40%{ opacity:1; transform:translate(-50%,-50%); }
-  100%{ opacity:0; transform:translate(-50%,-60%); }
+  text-align:center;
 }
 
 /* Controale stânga */
@@ -267,31 +110,3 @@ aside{
   aside{ order:2 }
   #center{ order:1; min-height: 52vh; }
 }
-
-/* Smart Manager UI */
-.smart-manager{background:#fff7e6;border:2px solid #f5c05f;border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:0 8px 18px rgba(0,0,0,.08)}
-.smart-manager .smart-header{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;margin-bottom:1rem}
-.smart-manager .smart-toggle{background:#f2994a;color:#fff;border:none;border-radius:999px;padding:.5rem 1.2rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(242,153,74,.3)}
-.smart-manager .smart-toggle[aria-pressed="false"]{background:#d9d9d9;color:#333}
-.smart-manager .smart-focus{display:flex;gap:.5rem}
-.smart-manager .smart-focus .focus-btn{display:flex;align-items:center;gap:.35rem;border:1px solid #f5c05f;background:#fff;padding:.4rem .7rem;border-radius:10px;font-weight:600;cursor:pointer;transition:background .2s}
-.smart-manager .smart-focus .focus-btn.active{background:#ffe0a3}
-.smart-manager .smart-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem}
-.smart-card{background:#fff;padding:.9rem;border-radius:12px;box-shadow:0 10px 18px rgba(0,0,0,.05)}
-.smart-card h3{margin-top:0;margin-bottom:.6rem;font-size:1.05rem;color:#a46606}
-.smart-card ul{list-style:none;margin:0;padding:0;display:grid;gap:.35rem;font-size:.95rem}
-.smart-card ul li strong{color:#0c6f4f}
-.smart-progress{height:12px;background:#ffe0a3;border-radius:999px;overflow:hidden;position:relative;margin-bottom:.5rem}
-.smart-progress-bar{height:100%;width:0;background:linear-gradient(90deg,#ffb347,#ffcc33);transition:width .3s ease}
-.smart-stars{font-size:1.4rem;letter-spacing:.3rem;color:#ffcc33;margin-bottom:.4rem}
-.smart-progress-text{margin:0;font-size:.9rem;color:#5c4a24}
-.smart-boost{margin-top:.6rem;border:none;border-radius:999px;padding:.45rem 1rem;background:#6fcf97;color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 16px rgba(111,207,151,.3)}
-.smart-boost:disabled{background:#a8d5bf;cursor:default}
-.smart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100000}
-.smart-overlay.hidden{display:none}
-.smart-modal{background:#fff;min-width:320px;max-width:420px;padding:1.2rem;border-radius:14px;box-shadow:0 18px 32px rgba(0,0,0,.25);text-align:center}
-.smart-modal h2{margin-top:0;margin-bottom:.75rem;color:#a45700}
-.smart-modal p{margin:.4rem 0;font-size:.95rem}
-.smart-modal .btn.smart-modal-close{margin-top:1rem;background:#f2994a;color:#fff;border:none;border-radius:999px;padding:.45rem 1.2rem;font-weight:600;cursor:pointer}
-body.smart-manager-on #left-controls{display:none}
-body.smart-manager-on .smart-manager{border-color:#f2a654;box-shadow:0 16px 32px rgba(242,166,84,.25)}

@@ -41,16 +41,7 @@ export const FK = (() => {
 
     // lume & meta
     world: { year: 1, season: 'primavara', day: 1, minute: 8 * 60, open: 8 * 60, close: 8 * 60 + DAY_MINUTES },
-    meta: { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } },
-
-    modes: { kidMode: true, smartManager: true, difficulty: 'easy' },
-    policy: { autoProduce: true, autoRestock: true, autoPrice: true, autoStaff: true, autoEvents: true, autoUpgrades: true, focus: 'balanced', cashReserve: 0.15 },
-    goals: { targetSold: 0, targetQ: 0.9, earnedStars: 0 },
-    rewards: { badges: [], streakDays: 0, lastVoucherDay: null },
-    safety: { lowStockThreshold: 40, minPlan: 40, softExpiration: true },
-    kidsTelemetry: { lastSummary: null, records: { soldBest: 0, qBest: 0 } },
-    offline: { lastSeen: Date.now(), carryMinutes: 0, maxDays: 7 },
-    economyFlags: { useWaitTime: false, softExpiration: true },
+    meta: { lastSeenTs: Date.now(), slot: 'autosave' },
 
     // marketing & upgrade-uri
     marketing: { flyerDaysLeft: 0, socialToday: false },
@@ -252,21 +243,6 @@ export const FK = (() => {
       S.version = 5;
       try { save(); } catch (_) { }
     }
-    S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } };
-    S.meta.config = S.meta.config || { economy: null, policies: null };
-    S.modes = Object.assign({}, DEF.modes, S.modes || {});
-    S.policy = Object.assign({}, DEF.policy, S.policy || {});
-    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
-    S.goals = Object.assign({}, DEF.goals, S.goals || {});
-    S.rewards = Object.assign({}, DEF.rewards, S.rewards || {});
-    if (!Array.isArray(S.rewards.badges)) S.rewards.badges = [];
-    S.safety = Object.assign({}, DEF.safety, S.safety || {});
-    S.kidsTelemetry = Object.assign({}, DEF.kidsTelemetry, S.kidsTelemetry || {});
-    if (!S.kidsTelemetry.records) S.kidsTelemetry.records = { soldBest: 0, qBest: 0 };
-    S.offline = Object.assign({}, DEF.offline, S.offline || {});
-    if (typeof S.offline.maxDays !== 'number' || S.offline.maxDays <= 0) S.offline.maxDays = DEF.offline.maxDays;
-    S.economyFlags = Object.assign({}, DEF.economyFlags, S.economyFlags || {});
-    if (!S.today) S.today = null;
   })();
 
   // ---------- Persistență (salvare pe slot + beacon către server) ----------
@@ -512,29 +488,10 @@ export const FK = (() => {
   // ---------- Quests ----------
   function _makeDailyQuests() {
     const w = S.world || { season: 'primavara', day: 1 };
-    const rep = S.reputation || 1;
-    const soldTarget = Math.round(110 + (rep - 1) * 60 + Math.random() * 40);
-    const soldStretch = soldTarget + 40;
-    const waitTarget = Number(Math.max(1.6, 2.4 - Math.min(0.6, (rep - 1) * 0.5)).toFixed(2));
-    const revenueTarget = Math.round(900 + Math.random() * 400);
-    const profitTarget = Math.round(320 + Math.random() * 260);
-
-    const questPool = [
-      { id: `dq_sold_${w.season}_${w.day}`, label: `Vinde ${soldTarget} produse`, type: 'sold', progress: 0, target: soldTarget, reward: { cash: soldTarget }, status: 'active', expires: { season: w.season, day: w.day } },
-      { id: `dq_sold_big_${w.season}_${w.day}`, label: `Impinge pana la ${soldStretch} buc`, type: 'sold', progress: 0, target: soldStretch, reward: { buff: { id: 'trafficRush', label: 'Trafic suplimentar', minutes: 60, trafficMult: 1.12 } }, status: 'active', expires: { season: w.season, day: w.day } },
-      { id: `dq_quality_${w.season}_${w.day}`, label: 'Pastreaza Q medie >= 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } },
-      { id: `dq_wait_${w.season}_${w.day}`, label: `Timp mediu <= ${waitTarget}`, type: 'wait', progress: 0, target: waitTarget, reward: { cash: 90 }, status: 'active', expires: { season: w.season, day: w.day } },
-      { id: `dq_rev_${w.season}_${w.day}`, label: `Incaseaza ${revenueTarget} lei`, type: 'revenue', progress: 0, target: revenueTarget, reward: { cash: 120 }, status: 'active', expires: { season: w.season, day: w.day } },
-      { id: `dq_profit_${w.season}_${w.day}`, label: `Profit de ${profitTarget} lei`, type: 'profit', progress: 0, target: profitTarget, reward: { buff: { id: 'profitFocus', label: 'Focus pe profit', minutes: 50, trafficMult: 1.04, qBonus: 0.01 } }, status: 'active', expires: { season: w.season, day: w.day } }
-    ];
-
-    const picks = [];
-    const pool = questPool.slice();
-    while (picks.length < 4 && pool.length) {
-      const idx = Math.floor(Math.random() * pool.length);
-      picks.push(pool.splice(idx, 1)[0]);
-    }
-    return picks;
+    const q1 = { id: `dq_sold_${w.season}_${w.day}`, label: 'Vinde 120 bucăți azi', type: 'sold', progress: 0, target: 120, reward: { cash: 120 }, status: 'active', expires: { season: w.season, day: w.day } };
+    const q2 = { id: `dq_quality_${w.season}_${w.day}`, label: 'Q medie ≥ 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } };
+    const q3 = { id: `dq_wait_${w.season}_${w.day}`, label: 'Timp mediu W ≤ 2.0', type: 'wait', progress: 0, target: 2.0, reward: { cash: 80 }, status: 'active', expires: { season: w.season, day: w.day } };
+    return [q1, q2, q3];
   }
   function ensureDailyQuests() {
     const w = S.world || { day: S.day || 1 };
@@ -550,31 +507,12 @@ export const FK = (() => {
     const sold = Math.round(agg?.sold || 0);
     const qavg = Number((agg?.Q || 0).toFixed(2));
     const wavg = Number((agg?.W || 0).toFixed(2));
-    const revenue = Math.round(agg?.rev || agg?.revenue || 0);
-    const profit = Math.round(agg?.profit || 0);
     d.forEach(q => {
-      if (q.type === 'sold') {
-        q.progress = sold;
-        if (sold >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
-      }
-      if (q.type === 'qavg') {
-        q.progress = qavg;
-        if (qavg >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
-      }
-      if (q.type === 'wait') {
-        q.progress = wavg;
-        if (wavg <= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
-      }
-      if (q.type === 'revenue') {
-        q.progress = revenue;
-        if (revenue >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
-      }
-      if (q.type === 'profit') {
-        q.progress = profit;
-        if (profit >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready');
-      }
+      if (q.type === 'sold') { q.progress = sold; if (sold >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
+      if (q.type === 'qavg') { q.progress = qavg; if (qavg >= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
+      if (q.type === 'wait') { q.progress = wavg; if (wavg <= q.target) q.status = (q.status === 'claimed' ? 'claimed' : 'ready'); }
     });
-    save(); emit('quests:updated', { sold, qavg, wavg, revenue, profit });
+    save(); emit('quests:updated', { sold, qavg, wavg });
   }
   function claimQuest(id) {
     const all = [...(S.quests?.daily || []), ...(S.quests?.weekly || [])];
@@ -832,86 +770,6 @@ export const FK = (() => {
     return true;
   }
 
-  // ---------- Config loader ----------
-  let __configPromise = null;
-  function fetchJson(pathRelative) {
-    if (typeof fetch !== 'function') return Promise.resolve(null);
-    return fetch(pathRelative, { cache: 'no-store' }).then((res) => {
-      if (!res.ok) throw new Error(`FK config load failed ${pathRelative}`);
-      return res.json();
-    });
-  }
-  async function loadConfigs() {
-    const existing = getConfigs();
-    if (existing.economy && existing.policies) return existing;
-    if (!__configPromise) {
-      __configPromise = (async () => {
-        const [economy, policies] = await Promise.all([
-          fetchJson('dashboard_assets/js/config/economy.json'),
-          fetchJson('dashboard_assets/js/config/policies.json')
-        ]);
-        S.meta = S.meta || { lastSeenTs: Date.now(), slot: 'autosave', config: { economy: null, policies: null } };
-        S.meta.config = { economy, policies };
-        try { save(); } catch (_) { }
-        emit('config:loaded', S.meta.config);
-        return S.meta.config;
-      })().catch((err) => { __configPromise = null; throw err; });
-    }
-    return __configPromise;
-  }
-  function getConfigs() {
-    return (S.meta && S.meta.config) ? S.meta.config : { economy: null, policies: null };
-  }
-
-  function updateGoals(next) {
-    S.goals = Object.assign({}, DEF.goals, S.goals || {}, next || {});
-    save();
-    emit('goals:update', S.goals);
-    return S.goals;
-  }
-  function setPolicy(partial) {
-    S.policy = Object.assign({}, DEF.policy, S.policy || {}, partial || {});
-    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
-    save();
-    emit('policy:update', S.policy);
-    return S.policy;
-  }
-  function getPolicy() {
-    S.policy = Object.assign({}, DEF.policy, S.policy || {});
-    if (typeof S.policy.cashReserve !== 'number') S.policy.cashReserve = DEF.policy.cashReserve;
-    return S.policy;
-  }
-  function grantBadge(id, meta = {}) {
-    if (!id) return false;
-    S.rewards = Object.assign({}, DEF.rewards, S.rewards || {});
-    S.rewards.badges = Array.isArray(S.rewards.badges) ? S.rewards.badges : [];
-    if (S.rewards.badges.find((b) => b.id === id)) return false;
-    const badge = Object.assign({ id, when: Date.now() }, meta);
-    S.rewards.badges.push(badge);
-    save();
-    emit('rewards:badge', badge);
-    return true;
-  }
-  function recordKidSummary(summary) {
-    if (!summary) return;
-    S.kidsTelemetry = Object.assign({}, DEF.kidsTelemetry, S.kidsTelemetry || {});
-    S.kidsTelemetry.records = Object.assign({}, DEF.kidsTelemetry.records, S.kidsTelemetry.records || {});
-    S.kidsTelemetry.lastSummary = summary;
-    if (typeof summary.sold === 'number' && summary.sold > (S.kidsTelemetry.records.soldBest || 0)) {
-      S.kidsTelemetry.records.soldBest = summary.sold;
-    }
-    if (typeof summary.quality === 'number' && summary.quality > (S.kidsTelemetry.records.qBest || 0)) {
-      S.kidsTelemetry.records.qBest = summary.quality;
-    }
-    save();
-    emit('kids:summary', summary);
-  }
-  function markOfflineSeen(timestamp = Date.now()) {
-    S.offline = Object.assign({}, DEF.offline, S.offline || {});
-    S.offline.lastSeen = timestamp;
-    save();
-  }
-
   // ---------- API public ----------
   return {
     // Stare
@@ -919,8 +777,6 @@ export const FK = (() => {
     setState(next) { S = Object.assign(S, next); save(); },
     saveState: save,
     addBuff, tickBuffs,
-    loadConfigs, getConfigs,
-    updateGoals, setPolicy, getPolicy, grantBadge, recordKidSummary, markOfflineSeen,
 
     // Export/Import
     exportJSON, importJSON,
