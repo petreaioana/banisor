@@ -119,7 +119,13 @@ function handleFocusChange(focus) {
 
 export function initSmartManagerUI() {
   leftControls = document.getElementById('left-controls');
-  if (!leftControls || root) return;
+  if (!leftControls) {
+    if (typeof window !== 'undefined') {
+      setTimeout(initSmartManagerUI, 32);
+    }
+    return;
+  }
+  if (root) return;
 
   root = document.createElement('section');
   root.id = 'smart-manager-panel';
@@ -156,7 +162,11 @@ export function initSmartManagerUI() {
     <button type="button" class="btn danger full" data-role="reset-progress">Resetează jocul</button>
   `;
 
-  leftControls.prepend(root);
+  if (typeof leftControls.prepend === 'function') {
+    leftControls.prepend(root);
+  } else {
+    leftControls.insertBefore(root, leftControls.firstChild || null);
+  }
 
   toggleBtn = root.querySelector('[data-role="smart-toggle"]');
   focusButtons = root.querySelectorAll('[data-focus]');
