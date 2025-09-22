@@ -11,4 +11,3 @@
   <?php view('partials/toasts.php'); ?>
 </body>
 </html>
-h
