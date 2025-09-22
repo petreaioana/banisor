@@ -1,0 +1,150 @@
+/* dashboard_assets/styles/base.css */
+/* =====================================================
+   FinKids Tycoon — Stiluri de bază (shared)
+   - variabile temă, reset ușor
+   - tipografie, butoane, formulare
+   - utilitare, bare, card/panel, topbar
+   ===================================================== */
+
+:root{
+  /* Paletă caldă, patiserie */
+  --bg:        #fdf5e6;
+  --ink:       #222;
+  --brand:     #f5a623;
+  --brand-2:   #ffe9b5;
+  --frame:     #e6a937;
+  --paper:     #fffbee;
+
+  --muted:     #6b6b6b;
+  --ok:        #1a8d2b;
+  --warn:      #b35b0e;
+  --bad:       #b3260e;
+
+  --border:    #d3b37a;
+  --border-2:  #e2c48d;
+
+  --focus:     #1a73e8;
+}
+
+/* Reset scurt */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+img{max-width:100%; height:auto; display:block}
+
+/* Tipografie globală */
+body{
+  font-family: "Comic Sans MS", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,h2,h3,h4{margin:6px 0 8px}
+p{margin:.35rem 0}
+
+/* Layout helpers */
+.row{display:flex; gap:8px; align-items:center; margin:.35rem 0; flex-wrap:wrap}
+.row.tight{justify-content:space-between}
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+
+/* Text utils */
+.small{font-size:.9rem}
+.muted{color:var(--muted)}
+.sep{opacity:.6}
+
+/* Form */
+label{font-size:.95rem}
+input[type="number"],
+input[type="time"],
+input[type="range"],
+input[type="text"],
+select{
+  padding:.35rem .5rem;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:#fff;
+  color:inherit;
+  outline:none;
+}
+input:focus, select:focus{
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(26,115,232,.15);
+}
+input[type="range"]{height:28px}
+
+/* Buttons */
+.btn{
+  background: var(--brand);
+  border:0;
+  color:#000;
+  padding:.45rem .7rem;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+  line-height:1;
+  transition: transform .02s ease, filter .15s ease;
+  user-select:none;
+}
+.btn:hover{filter:brightness(.95)}
+.btn:active{transform:translateY(1px)}
+.btn[disabled], .btn:disabled{opacity:.5; cursor:not-allowed}
+
+.btn.small{padding:.28rem .5rem; border-radius:8px; font-weight:600; font-size:.9rem}
+.btn.secondary{background: var(--brand-2)}
+.btn.ghost{background:transparent; border:1px dashed var(--border);}
+
+/* Bars */
+.bar{height:12px; background:#eee; border-radius:6px; overflow:hidden; border:1px solid #ccc}
+.bar>span{display:block; height:100%; background:#69c56f}
+.bar.warn>span{background:#f2b75f}
+.bar.bad>span{background:#e06a5f}
+
+/* Card / Panel */
+.panel.soft{
+  background: var(--paper);
+  border:1px dashed var(--frame);
+  border-radius:12px;
+  padding:10px;
+}
+
+/* Linie */
+hr{border:0; border-top:1px dashed var(--border); margin:.6rem 0}
+
+/* Topbar comun */
+#topbar{
+  position:sticky; top:0; z-index:1000;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:.5rem 1rem;
+  background:#fdd26e;
+  border-bottom:2px solid var(--frame)
+}
+#topbar .left{display:flex; align-items:center; gap:10px}
+#topbar .right{display:flex; align-items:center; gap:10px; font-weight:600}
+#topbar .brand{font-weight:700; text-decoration:none; color:inherit}
+#topbar .speed{display:flex; align-items:center; gap:6px}
+.speed-btn{background:#fff3c8}
+.speed-btn.active{outline:2px solid #000}
+
+/* Banisor sprite (mic) */
+.banisor-sprite{width:120px;height:120px;display:inline-block}
+.banisor-sprite svg{width:100%;height:100%;display:block}
+.banisor-sprite .hand-wave{transform-box:fill-box;transform-origin:left center;animation:hand-wave 2s ease-in-out infinite}
+@keyframes hand-wave{0%,100%{transform:rotate(0)}25%{transform:rotate(18deg)}50%{transform:rotate(-10deg)}75%{transform:rotate(14deg)}}
+.banisor-sprite .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}94%{transform:scaleY(.05)}96%{transform:scaleY(1)}}
+.banisor-sprite .hat{transform-box:fill-box;transform-origin:center;animation:hat-bob 2s ease-in-out infinite}
+@keyframes hat-bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.5px) rotate(-3deg)}}
+
+/* Alerte/Toast minimal shared (fallback; varianta de joc e în game.css) */
+.toast-container{position:fixed;top:12px;right:12px;z-index:100000;display:flex;flex-direction:column;gap:8px}
+.toast{background:#222;color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:.95}
+
+/* Accesibilitate */
+:focus-visible{outline:3px solid rgba(26,115,232,.4); outline-offset:2px}
+
+/* Mic utilities */
+.hidden{display:none !important}
+.centered{display:flex;align-items:center;justify-content:center}
+.round{border-radius:999px}
+.shadow{box-shadow:0 2px 8px rgba(0,0,0,.15)}

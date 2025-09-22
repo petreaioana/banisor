@@ -1,0 +1,106 @@
+/**
+ * FinKids Tycoon — CSS UI
+ * Ce face:
+ *  - Stilizează layout-ul, stepper-ul, canvașul și controalele.
+ *  - Include stiluri pentru „chip” (toppinguri ca imagini).
+ * Folosit de:
+ *  - game.php (VIEW)
+ */
+
+:root{
+  --frame:#c8a662;
+  --border-2:#e6dfca;
+  --brand:#ffd86f;
+  --brand-2:#ffd86f;
+  --paper:#fcfaf2;
+  --ink:#222;
+  --bg:#fffef7;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,sans-serif;background:#fffdf6;color:#222}
+a{color:inherit}
+.btn{display:inline-flex;align-items:center;gap:.4rem;background:#ffe38d;border:2px solid #c8a662;border-radius:10px;padding:.45rem .7rem;font-weight:700;cursor:pointer}
+.btn.secondary{background:#fff;border-color:#d9cfb5}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.btn.wide{width:100%;justify-content:center}
+.row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.small{font-size:.9rem}
+.muted{opacity:.7}
+.panel{background:#fff;border:1px dashed #e1d4b0;border-radius:10px;padding:.6rem}
+header#topbar{position:sticky;top:0;z-index:999;background:#fffef7;border-bottom:2px solid var(--frame);display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem}
+header .brand{font-weight:900;text-decoration:none}
+header .sep{opacity:.4;margin:0 .4rem}
+
+/* Stepper */
+#stepper{position:sticky;top:48px;z-index:900;background:linear-gradient(180deg, rgba(253,210,110,.95), rgba(253,210,110,.6));border-bottom:2px solid var(--frame)}
+#stepper ol{list-style:none;margin:0;padding:.35rem .75rem;display:flex;gap:.5rem;overflow:auto}
+#stepper li{background:#fffef7;border:2px solid var(--frame);border-radius:999px;padding:.28rem .7rem;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:.35rem;opacity:.85}
+#stepper li.active{background:var(--brand-2);outline:2px solid #000;opacity:1}
+#stepper li.done{background:#dff6df;border-color:#9ed39e}
+
+/* Layout */
+.game-layout{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;padding:12px;min-height:calc(100vh - 56px - 40px)}
+.game-panel{background:#fffef7;border:2px solid #e1d4b0;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.order-card{background:#fffbee;border:1px dashed #e1d4b0;border-radius:10px;padding:8px}
+.order-card .tops{margin:.25rem 0 .25rem 1rem}
+
+/* Canvas */
+.build-stage{position:relative;height:320px;background:#fff;border:2px dashed var(--border-2);border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;isolation:isolate}
+.shape{--mold-size:200px;position:relative;width:var(--mold-size);height:var(--mold-size);filter:drop-shadow(0 2px 6px rgba(0,0,0,.15))}
+.shape--circle{border-radius:999px;clip-path:circle(50% at 50% 50%)}
+.shape--heart{clip-path:polygon(50% 85%, 20% 60%, 12% 40%, 20% 25%, 35% 20%, 50% 30%, 65% 20%, 80% 25%, 88% 40%, 80% 60%)}
+.shape--star{clip-path:polygon(50% 5%, 61% 38%, 95% 38%, 67% 57%, 78% 90%, 50% 70%, 22% 90%, 33% 57%, 5% 38%, 39% 38%)}
+.shape-base{position:absolute;inset:0;background:radial-gradient(100% 100% at 50% 40%, #ffe7b3 0%, #ffd37a 55%, #f7b74d 100%);border:3px solid #b77a21;box-shadow:inset 0 6px 12px rgba(0,0,0,.08)}
+.shape-fill{position:absolute;left:0;bottom:0;width:100%;height:0%;background:repeating-linear-gradient(180deg, #f7c66a 0 6px, #f2b85a 6px 12px);border-top:1px solid rgba(0,0,0,.08);transition:height .15s ease}
+.shape-fill.good{box-shadow:0 0 0 2px #6ad16f inset, 0 0 12px rgba(106,209,111,.5) inset}
+.build-dropzone{position:absolute;inset:0;pointer-events:auto}
+.hidden{display:none !important}
+.canvas-controls{margin-top:10px;background:#fffbee;border:1px dashed #e1d4b0;border-radius:10px;padding:8px}
+
+/* Paletă / chips */
+.palette{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.chip-btn{display:flex;align-items:center;gap:6px;padding:.35rem .45rem;border:1px solid var(--border-2);border-radius:10px;background:#fffef7;cursor:grab;user-select:none}
+.chip-btn img{width:22px;height:22px;object-fit:contain;display:inline-block;filter:drop-shadow(0 1px 0 rgba(0,0,0,.05))}
+
+/* CHIP (topping ca imagine) */
+.chip{
+  position:absolute;
+  width:44px;
+  height:44px;
+  border-radius:8px;
+  cursor:move;
+  user-select:none;
+  touch-action:none;
+  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.6) inset;
+  animation:chipPop .18s ease-out both;
+}
+.chip img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+@keyframes chipPop{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
+
+/* Bake */
+.oven img{width:100%;max-width:320px;display:block;margin:0 auto}
+.progress-container{width:90%;height:20px;background:var(--paper);border:2px solid var(--frame);border-radius:10px;margin:8px auto}
+.progress-bar{height:100%;width:0;background:var(--brand);border-radius:10px;transition:width .08s;position:relative;overflow:hidden}
+.hit-window{width:90%;height:16px;border:1px dashed #999;margin:0 auto;border-radius:10px;position:relative}
+.hit-window span{position:absolute;left:55%;width:10%;height:100%;background:#88d18a;opacity:.45;border-radius:10px}
+#oven-img.shake{animation:shake .35s ease-in-out}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-2px)}40%{transform:translateX(2px)}60%{transform:translateX(-1px)}80%{transform:translateX(1px)}}
+
+/* Toast & particles */
+.particle{position:absolute;width:8px;height:8px;border-radius:50%;pointer-events:none;opacity:.9}
+@keyframes pop{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.6) translate(var(--dx),var(--dy));opacity:0}}
+.toast-container{position:fixed;top:12px;right:12px;z-index:100000;display:flex;flex-direction:column;gap:8px}
+.toast{background:#222;color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:.95}
+
+footer.game-footer{display:flex;justify-content:space-between;align-items:center;padding:.6rem 1rem}
+
+@media (max-width:1100px){
+  .game-layout{grid-template-columns:300px 1fr}
+  .game-panel:last-child{order:3}
+  .build-stage{height:300px}
+  .palette{grid-template-columns:repeat(3,1fr)}
+}
+@media (max-width:860px){
+  .game-layout{grid-template-columns:1fr}
+  .build-stage{height:280px}
+}
