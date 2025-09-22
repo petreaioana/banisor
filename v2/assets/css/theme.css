@@ -1,0 +1,7 @@
+:root{
+  --brand:#ffd86f; --ink:#222; --paper:#fffef7;
+}
+body{ background:var(--paper); }
+.card{ border-radius:14px; }
+.btn{ border-radius:12px; font-weight:700; }
+.progress{ height:10px; border-radius:12px; }

@@ -1,0 +1,54 @@
+/* public/assets/css/atelier.css */
+:root{
+  --lemon:#ffe38d; --frame:#c8a662; --paper:#fffef7; --ink:#222;
+}
+body.bg-cream{ background:#fffdf6; color:var(--ink); }
+.navbar.bg-lemon{ background:linear-gradient(180deg,#ffe38d,#ffd86f); }
+
+.stepper{ list-style:none; display:flex; gap:.5rem; padding:.5rem 1rem; background:#fff; border:2px solid var(--frame); border-radius:999px; }
+.stepper li{ padding:.35rem .8rem; border:2px solid var(--frame); border-radius:999px; background:#fffef7; font-weight:700; white-space:nowrap; }
+.stepper li.active{ background:#ffd86f; outline:2px solid #000; }
+
+.build-stage{ position:relative; height:320px; background:#fff; border:2px dashed #e9e1c7; border-radius:14px; display:flex; align-items:center; justify-content:center; }
+.shape{ --size:200px; width:var(--size); height:var(--size); position:relative; }
+.shape-base{ position:absolute; inset:0; background:radial-gradient(100% 100% at 50% 40%, #ffe7b3 0%, #ffd37a 55%, #f7b74d 100%); border:3px solid #b77a21; border-radius:20px; }
+.shape-fill{ position:absolute; left:0; bottom:0; width:100%; height:0%; background:repeating-linear-gradient(180deg,#f7c66a 0 6px,#f2b85a 6px 12px); transition:height .12s ease; border-top:1px solid rgba(0,0,0,.08); }
+.shape.good .shape-fill{ box-shadow:inset 0 0 0 2px #6ad16f, inset 0 0 12px rgba(106,209,111,.5); }
+.shape[data-shape="circle"] .shape-base{ border-radius:999px; }
+.shape[data-shape="heart"] .shape-base{ clip-path:polygon(50% 85%, 20% 60%, 12% 40%, 20% 25%, 35% 20%, 50% 30%, 65% 20%, 80% 25%, 88% 40%, 80% 60%); }
+.shape[data-shape="star"]  .shape-base{ clip-path:polygon(50% 5%,61% 38%,95% 38%,67% 57%,78% 90%,50% 70%,22% 90%,33% 57%,5% 38%,39% 38%); }
+
+.dropzone{ position:absolute; inset:0; }
+.chip{ position:absolute; width:44px; height:44px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.6) inset; cursor:grab; user-select:none; }
+.chip img{ width:100%; height:100%; object-fit:contain; pointer-events:none; }
+
+.hit-window{ position:relative; height:14px; background:#fff; border:1px dashed #aaa; border-radius:12px; overflow:hidden; }
+.hit-window span{ position:absolute; left:55%; width:10%; top:0; bottom:0; background:#88d18a88; }
+
+/* Bănișor – mascotă CSS */
+.banisor-sprite,.banisor-face{
+  width:36px; height:36px; border-radius:999px;
+  background:radial-gradient(circle at 35% 35%, #ffe58a 0%, #ffd053 60%, #f2a62b 100%);
+  border:3px solid #c67a12; position:relative; display:inline-block;
+}
+.banisor-face::before,.banisor-face::after{
+  content:""; position:absolute; width:6px; height:6px; border-radius:999px; background:#30250f; top:12px;
+}
+.banisor-face::before{ left:10px; }
+.banisor-face::after { right:10px; }
+.banisor-face{ animation: bob 1.5s ease-in-out infinite; }
+@keyframes bob{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-2px) } }
+.banisor-face::after{ box-shadow: 0 12px 0 0 #30250f; mask: radial-gradient(9px 7px at 50% 70%, transparent 8px,#30250f 9px); }
+
+.banisor-helper{ display:flex; align-items:center; gap:.6rem; }
+.banisor-helper .speech{
+  background:#fffbe6; border:2px solid #f2d072; border-radius:12px; padding:.4rem .6rem; font-weight:600;
+}
+
+/* paleta ingrediente */
+.palette{ display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; }
+.palette .btn-chip{ display:flex; align-items:center; gap:.35rem; border:1px solid #eadfbd; background:#fffef7; border-radius:10px; padding:.35rem .5rem; }
+.palette .btn-chip img{ width:22px; height:22px; }
+
+/* culori mici */
+.bg-lemon{ background:#ffe38d; }

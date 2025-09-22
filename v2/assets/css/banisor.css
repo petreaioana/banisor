@@ -1,0 +1,30 @@
+.banisor-wrap{ position:relative; height:80px; }
+.banisor{
+  width:72px;height:72px;border-radius:50%;
+  background: radial-gradient(60% 50% at 40% 35%, #ffe58a 0%, #ffd053 60%, #f2a62b 100%);
+  border:4px solid #c67a12; position:relative; box-shadow:0 4px 10px rgba(0,0,0,.12);
+  animation:ban-bounce 2.5s ease-in-out infinite;
+}
+@keyframes ban-bounce{
+  0%,100%{ transform:translateY(0) }
+  50%{ transform:translateY(-6px) }
+}
+.ban-face{ position:absolute; inset:0; display:flex; justify-content:center; align-items:center; gap:10px; }
+.ban-eye{
+  width:8px;height:8px;border-radius:50%; background:#2b2106;
+  box-shadow:0 0 0 2px #ffde82 inset;
+}
+.ban-smile{
+  position:absolute; bottom:18px; left:50%; transform:translateX(-50%);
+  width:26px;height:14px;border-bottom:3px solid #2b2106;border-radius:0 0 20px 20px;
+}
+.ban-hands .ban-hand{
+  position:absolute; top:28px; width:18px; height:18px; border:4px solid #c67a12; border-radius:50%;
+  background:#f0a82a;
+}
+.ban-hand.left{ left:-16px; animation:ban-wave 2s ease-in-out infinite; transform-origin:28px 9px; }
+.ban-hand.right{ right:-16px; }
+@keyframes ban-wave{
+  0%,100%{ transform:rotate(0deg) }
+  50%{ transform:rotate(18deg) }
+}
