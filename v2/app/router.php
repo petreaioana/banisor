@@ -4,6 +4,8 @@ declare(strict_types=1);
 require __DIR__ . '/db.php';
 require __DIR__ . '/helpers.php';
 
+register_error_logger();
+
 foreach (['models', 'services', 'controllers'] as $directory) {
     foreach (glob(__DIR__ . "/{$directory}/*.php") ?: [] as $file) {
         require_once $file;
