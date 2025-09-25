@@ -95,7 +95,7 @@
             <!-- Panouri per etapă (fără JS greu) -->
             <div id="panel-pour" class="panel-phase">
               <div class="d-flex align-items-center gap-2">
-                <button id="btn-pour" class="btn btn-primary">🫗 Ține pentru turnare</button>
+                <button id="btn-pour" class="btn btn-primary">🍯 Ține pentru turnare</button>
                 <input id="pour-range" type="range" min="0" max="100" step="1" class="form-range w-100" aria-label="Procent umplere">
                 <b><span id="pour-pct">0</span>%</b>
               </div>
