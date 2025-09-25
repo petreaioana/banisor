@@ -1,5 +1,3 @@
-/* ========== UnificareExport | game.php ========== */
-
 <?php
 /**
  * FinKids Tycoon — VIEW (root)
