@@ -40,7 +40,7 @@
 
     <!-- Stepper -->
     <ol class="stepper shadow-sm">
-      <li class="active" data-step="pour">🫙 Turnare</li>
+      <li class="active" data-step="pour">🍯 Turnare</li>
       <li data-step="decor">🍬 Decor</li>
       <li data-step="bake">🔥 Coacere</li>
       <li data-step="serve">🧁 Servire</li>

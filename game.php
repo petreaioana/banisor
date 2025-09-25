@@ -101,7 +101,7 @@
       <!-- Pour tools -->
       <div id="tools-pour" class="tools--phase" data-phase="pour">
         <div class="row">
-          <button id="btn-pour-hold" class="btn">🫗 Ține pentru turnare</button>
+          <button id="btn-pour-hold" class="btn">🍯 Ține pentru turnare</button>
           <input id="pour-range" type="range" min="0" max="100" step="1" value="0" aria-label="Procent umplere">
           <b><span id="pour-pct">0</span>%</b>
         </div>
