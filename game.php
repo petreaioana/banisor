@@ -1,11 +1,13 @@
+/* ========== UnificareExport | game.php ========== */
+
 <?php
 /**
  * FinKids Tycoon — VIEW (root)
- * Rol: doar randare HTML + legături către CSS/JS din game_assets.
- * Nu conține rutare/logică API; pentru JSON folosește game_assets/api.php.
+ * Rol: randare HTML + legături către CSS/JS din game_assets.
+ * API-ul JSON este în game_assets/api.php.
  * Dependențe:
  *  - CSS:  game_assets/css/game.css
- *  - JS:   game_assets/js/game.js (apelează API-ul)
+ *  - JS:   game_assets/js/game.js
  *  - IMG:  game_assets/images/*
  */
 ?><!DOCTYPE html>

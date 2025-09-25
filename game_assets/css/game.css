@@ -1,10 +1,13 @@
+/* ==========  | game_assets\css\game.css ========== */
+
 /**
- * FinKids Tycoon — CSS UI
+ * FinKids Tycoon — CSS UI (Redesign v2 — kid friendly, pe etape, cu animații)
  * Ce face:
  *  - Stilizează layout-ul, stepper-ul, canvașul și controalele.
- *  - Include stiluri pentru „chip” (toppinguri ca imagini).
+ *  - Adaugă overlay de "Final de etapă" cu confetti + animații.
+ *  - Menține clasele existente ca să nu rupă logica; doar adaugă îmbunătățiri.
  * Folosit de:
- *  - game.php (VIEW)
+ *  - game.php (VIEW) + game.js
  */
 
 :root{
@@ -15,37 +18,75 @@
   --paper:#fcfaf2;
   --ink:#222;
   --bg:#fffef7;
+
+  --good:#34c759;
+  --warn:#ffb020;
+  --bad:#ff5a5f;
+  --sky:#8fd3fe;
+  --pink:#ffb3c1;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,sans-serif;background:#fffdf6;color:#222}
 a{color:inherit}
-.btn{display:inline-flex;align-items:center;gap:.4rem;background:#ffe38d;border:2px solid #c8a662;border-radius:10px;padding:.45rem .7rem;font-weight:700;cursor:pointer}
+img{max-width:100%;display:block}
+
+/* Buttons */
+.btn{
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:#ffe38d;border:2px solid #c8a662;border-radius:12px;
+  padding:.55rem .9rem;font-weight:800;cursor:pointer;letter-spacing:.2px;
+  box-shadow:0 2px 0 rgba(0,0,0,.06);
+  transition:transform .06s ease, box-shadow .12s ease, background .15s ease;
+}
+.btn:active{transform:translateY(1px);box-shadow:0 1px 0 rgba(0,0,0,.06)}
 .btn.secondary{background:#fff;border-color:#d9cfb5}
 .btn[disabled]{opacity:.5;pointer-events:none}
 .btn.wide{width:100%;justify-content:center}
+.btn.big{font-size:1.05rem;padding:.85rem 1.2rem;border-radius:16px}
+.btn.next-xl{
+  font-size:1.25rem;padding:1rem 1.4rem;border-radius:18px;
+  background:linear-gradient(180deg,#ffe799,#ffd76e);
+  animation:btnPulse 1.25s ease-in-out infinite;
+}
+@keyframes btnPulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.04)}
+}
+
 .row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
 .small{font-size:.9rem}
 .muted{opacity:.7}
-.panel{background:#fff;border:1px dashed #e1d4b0;border-radius:10px;padding:.6rem}
-header#topbar{position:sticky;top:0;z-index:999;background:#fffef7;border-bottom:2px solid var(--frame);display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem}
+.panel{background:#fff;border:1px dashed #e1d4b0;border-radius:12px;padding:.6rem}
+header#topbar{
+  position:sticky;top:0;z-index:999;background:#fffef7;border-bottom:2px solid var(--frame);
+  display:flex;gap:.6rem;justify-content:space-between;align-items:center;padding:.5rem .7rem
+}
 header .brand{font-weight:900;text-decoration:none}
 header .sep{opacity:.4;margin:0 .4rem}
 
 /* Stepper */
-#stepper{position:sticky;top:48px;z-index:900;background:linear-gradient(180deg, rgba(253,210,110,.95), rgba(253,210,110,.6));border-bottom:2px solid var(--frame)}
-#stepper ol{list-style:none;margin:0;padding:.35rem .75rem;display:flex;gap:.5rem;overflow:auto}
-#stepper li{background:#fffef7;border:2px solid var(--frame);border-radius:999px;padding:.28rem .7rem;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:.35rem;opacity:.85}
+#stepper{position:sticky;top:56px;z-index:900;background:linear-gradient(180deg, rgba(253,210,110,.95), rgba(253,210,110,.6));border-bottom:2px solid var(--frame);backdrop-filter:saturate(1.2)}
+#stepper ol{list-style:none;margin:0;padding:.4rem .75rem;display:flex;gap:.5rem;overflow:auto}
+#stepper li{
+  background:#fffef7;border:2px solid var(--frame);border-radius:999px;padding:.35rem .8rem;
+  font-weight:800;white-space:nowrap;display:flex;align-items:center;gap:.4rem;opacity:.9
+}
+#stepper li::before{content:"";width:.65rem;height:.65rem;border-radius:50%;background:#ffd86f;box-shadow:0 0 0 2px #0001 inset}
 #stepper li.active{background:var(--brand-2);outline:2px solid #000;opacity:1}
 #stepper li.done{background:#dff6df;border-color:#9ed39e}
+#stepper li.done::before{background:var(--good)}
 
 /* Layout */
 .game-layout{display:grid;grid-template-columns:320px 1fr 380px;gap:12px;padding:12px;min-height:calc(100vh - 56px - 40px)}
-.game-panel{background:#fffef7;border:2px solid #e1d4b0;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.order-card{background:#fffbee;border:1px dashed #e1d4b0;border-radius:10px;padding:8px}
+.game-panel{background:#fffef7;border:2px solid #e1d4b0;border-radius:14px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.order-card{background:#fffbee;border:1px dashed #e1d4b0;border-radius:12px;padding:8px}
 .order-card .tops{margin:.25rem 0 .25rem 1rem}
 
 /* Canvas */
-.build-stage{position:relative;height:320px;background:#fff;border:2px dashed var(--border-2);border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;isolation:isolate}
+.build-stage{
+  position:relative;height:320px;background:#fff;border:2px dashed var(--border-2);
+  border-radius:16px;display:flex;align-items:center;justify-content:center;overflow:hidden;isolation:isolate
+}
 .shape{--mold-size:200px;position:relative;width:var(--mold-size);height:var(--mold-size);filter:drop-shadow(0 2px 6px rgba(0,0,0,.15))}
 .shape--circle{border-radius:999px;clip-path:circle(50% at 50% 50%)}
 .shape--heart{clip-path:polygon(50% 85%, 20% 60%, 12% 40%, 20% 25%, 35% 20%, 50% 30%, 65% 20%, 80% 25%, 88% 40%, 80% 60%)}
@@ -55,24 +96,18 @@ header .sep{opacity:.4;margin:0 .4rem}
 .shape-fill.good{box-shadow:0 0 0 2px #6ad16f inset, 0 0 12px rgba(106,209,111,.5) inset}
 .build-dropzone{position:absolute;inset:0;pointer-events:auto}
 .hidden{display:none !important}
-.canvas-controls{margin-top:10px;background:#fffbee;border:1px dashed #e1d4b0;border-radius:10px;padding:8px}
+.canvas-controls{margin-top:10px;background:#fffbee;border:1px dashed #e1d4b0;border-radius:12px;padding:8px}
 
 /* Paletă / chips */
 .palette{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
-.chip-btn{display:flex;align-items:center;gap:6px;padding:.35rem .45rem;border:1px solid var(--border-2);border-radius:10px;background:#fffef7;cursor:grab;user-select:none}
+.chip-btn{display:flex;align-items:center;gap:6px;padding:.4rem .5rem;border:1px solid var(--border-2);border-radius:12px;background:#fffef7;cursor:grab;user-select:none;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+.chip-btn:hover{transform:translateY(-1px)}
 .chip-btn img{width:22px;height:22px;object-fit:contain;display:inline-block;filter:drop-shadow(0 1px 0 rgba(0,0,0,.05))}
 
 /* CHIP (topping ca imagine) */
 .chip{
-  position:absolute;
-  width:44px;
-  height:44px;
-  border-radius:8px;
-  cursor:move;
-  user-select:none;
-  touch-action:none;
-  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.6) inset;
-  animation:chipPop .18s ease-out both;
+  position:absolute;width:44px;height:44px;border-radius:10px;cursor:move;user-select:none;touch-action:none;
+  box-shadow:0 1px 3px rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.6) inset;animation:chipPop .18s ease-out both;
 }
 .chip img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 @keyframes chipPop{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
@@ -90,10 +125,71 @@ header .sep{opacity:.4;margin:0 .4rem}
 .particle{position:absolute;width:8px;height:8px;border-radius:50%;pointer-events:none;opacity:.9}
 @keyframes pop{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.6) translate(var(--dx),var(--dy));opacity:0}}
 .toast-container{position:fixed;top:12px;right:12px;z-index:100000;display:flex;flex-direction:column;gap:8px}
-.toast{background:#222;color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:.95}
+.toast{background:#222;color:#fff;padding:8px 12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.3);opacity:.95}
 
+/* ====== OVERLAY: Final de etapă ====== */
+.stage-modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);
+  display:flex;align-items:center;justify-content:center;z-index:1000000;animation:fadeIn .15s ease-out both;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.stage-modal{
+  width:min(560px,92vw);background:linear-gradient(180deg,#fffef9,#fff4cc);
+  border:3px solid var(--frame);border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.18);
+  padding:18px 18px 16px;position:relative;animation:popIn .18s ease-out both
+}
+@keyframes popIn{from{transform:scale(.86);opacity:.2}to{transform:scale(1);opacity:1}}
+.stage-modal .title{
+  font-weight:900;font-size:1.35rem;display:flex;align-items:center;gap:.55rem;margin-bottom:.35rem
+}
+.stage-modal .score-wrap{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;margin:.3rem 0 .75rem;
+  background:#fff;border:2px dashed #e6dfca;border-radius:16px;padding:.6rem .8rem
+}
+.score-bubble{
+  min-width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(90% 90% at 50% 40%, #eaffea, #d6fad7);
+  border:3px solid var(--good);box-shadow:0 6px 18px rgba(0,0,0,.09), inset 0 6px 16px rgba(52,199,89,.15);
+  font-weight:900;font-size:1.8rem
+}
+.score-bubble.warn{background:radial-gradient(90% 90% at 50% 40%, #fff7e0, #ffe3b0);border-color:var(--warn)}
+.score-bubble.bad{background:radial-gradient(90% 90% at 50% 40%, #ffe1e4, #ffc2c8);border-color:var(--bad)}
+.stage-modal .details{
+  flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.95rem
+}
+.detail{
+  background:#fffaf0;border:1px dashed #eddbaa;border-radius:12px;padding:.5rem .6rem
+}
+.badge{
+  display:inline-flex;align-items:center;gap:.35rem;font-weight:800;
+  padding:.25rem .5rem;border-radius:999px;background:#eef9ff;border:2px solid #bfe7ff
+}
+.badge.good{background:#eafff0;border-color:#bfeeca}
+.badge.warn{background:#fff6e6;border-color:#ffd9a8}
+.badge.bad{background:#ffecec;border-color:#ffc2c2}
+
+.stage-modal .actions{margin-top:.8rem;display:flex;gap:.6rem;justify-content:flex-end}
+.stage-modal .actions .btn:nth-child(1){margin-right:auto}
+
+/* Elemente decorative kid-friendly */
+.ribbon{
+  position:absolute;top:-8px;right:-8px;background:linear-gradient(90deg,#ffec9a,#ffd86f);
+  color:#000;font-weight:900;padding:.35rem .7rem;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.12);transform:rotate(6deg)
+}
+.stars{
+  position:absolute;inset:0;pointer-events:none
+}
+.star{position:absolute;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle,#fff 20%, #ffd86f 60%, transparent 61%);filter:drop-shadow(0 2px 2px rgba(0,0,0,.15));animation:twinkle 1.6s ease-in-out infinite}
+.star.s1{top:14%;left:8%;animation-delay:.1s}
+.star.s2{top:8%;left:84%;animation-delay:.35s}
+.star.s3{top:82%;left:10%;animation-delay:.6s}
+.star.s4{top:86%;left:86%;animation-delay:.9s}
+@keyframes twinkle{0%,100%{transform:scale(.9);opacity:.8}50%{transform:scale(1.15);opacity:1}}
+
+/* Footer */
 footer.game-footer{display:flex;justify-content:space-between;align-items:center;padding:.6rem 1rem}
 
+/* Responsive */
 @media (max-width:1100px){
   .game-layout{grid-template-columns:300px 1fr}
   .game-panel:last-child{order:3}
@@ -104,3 +200,9 @@ footer.game-footer{display:flex;justify-content:space-between;align-items:center
   .game-layout{grid-template-columns:1fr}
   .build-stage{height:280px}
 }
+
+/* ====== Microlib pentru feedback “woohoo” ====== */
+.woo{
+  display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .6rem;border-radius:12px;background:#fff;border:2px dashed #e6dfca
+}
+.woo em{font-style:normal;font-weight:900}

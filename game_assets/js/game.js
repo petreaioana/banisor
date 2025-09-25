@@ -1,8 +1,11 @@
+/* ========== UnificareExport | game_assets\js\game.js ========== */
+
 /**
- * FinKids Tycoon — Frontend logic (no modules)
+ * FinKids Tycoon — Frontend logic (Redesign v2 — kid friendly, pe etape)
  * Ce face:
  *  - Leagă UI + inputuri + canvas cu API-ul PHP.
  *  - Gestionează starea jocului (pour/decor/bake/serve) și scorurile.
+ *  - Adaugă ecran de "Final de etapă" (overlay cu confetti) + buton mare "Etapa următoare".
  *
  * Dependențe:
  *  - API JSON: game_assets/api.php (state/serve/reset)
@@ -37,6 +40,7 @@ const FK = {
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const fmtPct = (v)=>`${Math.round(v*100)}%`;
 
 // ---------- Ingredients ----------
 const ING = [
@@ -118,6 +122,65 @@ function ovenPuff(success){
   const img=$('#oven-img'); if(!img) return;
   const r=img.getBoundingClientRect();
   confettiAt(r.left+r.width*0.5, r.top+r.height*0.15, success?16:8);
+}
+
+// ---------- Kid-friendly overlay: Final de etapă ----------
+function scoreTone(score){
+  if(score>=75) return 'good';
+  if(score>=45) return 'warn';
+  return 'bad';
+}
+function openStageModal({title, emoji='✨', score=0, detailsHTML='', badges=[], nextLabel='Etapa următoare', onNext}={}){
+  // Backdrop
+  const bg=document.createElement('div');
+  bg.className='stage-modal-backdrop';
+  bg.setAttribute('role','dialog');
+  bg.setAttribute('aria-modal','true');
+
+  // Modal
+  const box=document.createElement('div');
+  box.className='stage-modal';
+  box.innerHTML=`
+    <div class="ribbon">👏 Bravo!</div>
+    <div class="stars">
+      <div class="star s1"></div><div class="star s2"></div>
+      <div class="star s3"></div><div class="star s4"></div>
+    </div>
+    <div class="title">${emoji} ${title}</div>
+    <div class="score-wrap">
+      <div class="score-bubble ${scoreTone(score)}">${Math.max(0,Math.min(100,Math.round(score)))}</div>
+      <div class="details">${detailsHTML}</div>
+    </div>
+    <div class="actions">
+      <button class="btn secondary" id="stage-close">Închide</button>
+      <button class="btn next-xl" id="stage-next">${nextLabel} ⟶</button>
+    </div>
+  `;
+
+  // Badges (facultativ)
+  if(Array.isArray(badges) && badges.length){
+    const det = box.querySelector('.details');
+    const wrap=document.createElement('div');
+    wrap.className='detail';
+    wrap.innerHTML = badges.map(b=>`<span class="badge ${b.tone||''}">${b.emoji||'⭐'} ${b.text||''}</span>`).join(' ');
+    det?.appendChild(wrap);
+  }
+
+  bg.appendChild(box);
+  document.body.appendChild(bg);
+
+  // Confetti în centru
+  const r = box.getBoundingClientRect();
+  confettiAt(r.left + r.width/2, r.top + 20, 28);
+
+  const cleanup = ()=>{ try{ bg.remove(); }catch(_){ } };
+  box.querySelector('#stage-close')?.addEventListener('click', cleanup);
+  box.querySelector('#stage-next')?.addEventListener('click', ()=>{
+    if(typeof onNext === 'function') onNext();
+    cleanup();
+  });
+
+  return cleanup;
 }
 
 // ---------- UI helpers ----------
@@ -331,7 +394,21 @@ function stopBake(){
   else     { playBuzz(); $('#oven-img')?.classList.add('shake'); setTimeout(()=>$('#oven-img')?.classList.remove('shake'),380); ovenPuff(false); }
 
   computeFinalScores(); renderScores();
-  setPhase('serve');
+
+  // ✨ Ecran "Final de coacere" + buton mare "Mergi la servire"
+  const details = `
+    <div class="detail"><b>Progres:</b> ${fmtPct(p)} · <b>Țintă:</b> ${fmtPct(a)}–${fmtPct(b)}</div>
+    <div class="detail"><b>Calitate Q:</b> ${(state.scores.q||0).toFixed(2)} · <b>Cantitate:</b> ${state.scores.qty||0} buc</div>
+  `;
+  openStageModal({
+    title: inWin ? 'Coacere perfectă!' : 'Coacere încheiată',
+    emoji: inWin ? '🔥' : '⏱️',
+    score: state.scores.bake||0,
+    detailsHTML: details,
+    badges: inWin ? [{emoji:'✨', text:'În fereastra verde!', tone:'good'}] : [{emoji:'🛠️', text:'Încearcă să prinzi zona verde', tone:'warn'}],
+    nextLabel:'Mergi la servire',
+    onNext: ()=> setPhase('serve')
+  });
 }
 
 // ---------- Serve ----------
@@ -425,19 +502,88 @@ function newOrder(){
   renderScores();
 }
 
+// ---------- Etape gamificate ----------
+function canGoNextFrom(phase){
+  if(phase==='pour'){
+    if(!state.order) return {ok:false, msg:'Nicio comandă activă.'};
+    if(state.fillPct < state.order.pour[0]) return {ok:false, msg:'Toarnă puțin mai mult până intri în zona verde.'};
+    return {ok:true};
+  }
+  if(phase==='decorate'){
+    if(state.placed.length<2) return {ok:false, msg:'Adaugă cel puțin două toppinguri.'};
+    return {ok:true};
+  }
+  if(phase==='bake'){
+    if(!state.baking.attempted) return {ok:false, msg:'Pornește și oprește coacerea înainte.'};
+    return {ok:true};
+  }
+  return {ok:true};
+}
+function celebrateAndAdvance(fromPhase){
+  // pregătește date
+  computeFinalScores(); renderScores();
+  if(fromPhase==='pour'){
+    const [a,b]=state.order.pour;
+    openStageModal({
+      title:'Etapa de turnare finalizată!',
+      emoji:'🫙',
+      score: state.scores.pour||0,
+      detailsHTML: `
+        <div class="detail"><b>Umplere:</b> ${fmtPct(state.fillPct)} · <b>Țintă:</b> ${fmtPct(a)}–${fmtPct(b)}</div>
+        <div class="detail"><b>Tip:</b> Ține butonul mai puțin pentru ajustări fine.</div>
+      `,
+      badges:[
+        {emoji:'🧁', text:`Mărime ${state.sizeKey}`, tone:'good'},
+      ],
+      nextLabel:'Mergi la decorare',
+      onNext: ()=> setPhase('decorate')
+    });
+  } else if(fromPhase==='decorate'){
+    const want=new Set(state.order.tops);
+    const have=new Set(state.placed.map(p=>p.id));
+    let matched=0; want.forEach(id=>{ if(have.has(id)) matched++; });
+    openStageModal({
+      title:'Etapa de decor terminată!',
+      emoji:'🍬',
+      score: state.scores.top||0,
+      detailsHTML: `
+        <div class="detail"><b>Toppinguri cerute:</b> ${Array.from(want).length} · <b>Potrivite:</b> ${matched}</div>
+        <div class="detail"><b>Plasate total:</b> ${state.placed.length} · Răspândește-le uniform pentru puncte bonus.</div>
+      `,
+      badges:[
+        {emoji:'✨', text:`${matched}/${want.size} cerute`, tone: matched===want.size?'good':'warn'}
+      ],
+      nextLabel:'Mergi la coacere',
+      onNext: ()=> setPhase('bake')
+    });
+  } else if(fromPhase==='bake'){
+    // (Pentru bake folosim deja modalul din stopBake, deci nu dublăm.)
+  }
+}
+
 // ---------- Events ----------
 function wireEvents(){
+  // Navigare etape
   $('#btn-prev')?.addEventListener('click', ()=>{
     const idx=Math.max(0, PHASES.indexOf(state.phase)-1);
     if(state.phase==='bake' && state.baking.running){ toast('Oprește coacerea mai întâi.'); return; }
     setPhase(PHASES[idx]);
   });
+
   $('#btn-next')?.addEventListener('click', ()=>{
-    const idx=Math.min(PHASES.length-1, PHASES.indexOf(state.phase)+1);
-    if(state.phase==='pour'){ if(!state.order) return; if(state.fillPct < state.order.pour[0]){ toast('Toarnă puțin mai mult!'); return; } }
-    if(state.phase==='decorate'){ if(state.placed.length<2){ toast('Adaugă cel puțin două toppinguri.'); return; } }
-    if(state.phase==='bake'){ if(!state.baking.attempted){ toast('Pornește coacerea înainte de a continua.'); return; } }
-    setPhase(PHASES[idx]);
+    const chk = canGoNextFrom(state.phase);
+    if(!chk.ok){ toast(chk.msg); return; }
+
+    // Overlay “final de etapă” pentru pour/decor; pentru bake se face în stopBake
+    if(state.phase==='pour' || state.phase==='decorate'){
+      celebrateAndAdvance(state.phase);
+    } else if(state.phase==='bake'){
+      // dacă a fost deja coacerea, trece direct la serve (fallback)
+      setPhase('serve');
+    } else {
+      const idx=Math.min(PHASES.length-1, PHASES.indexOf(state.phase)+1);
+      setPhase(PHASES[idx]);
+    }
   });
 
   $('#btn-new-order')?.addEventListener('click', ()=>{ newOrder(); setPhase('pour'); });
