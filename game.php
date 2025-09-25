@@ -41,7 +41,7 @@
   <!-- Stepper -->
   <nav id="stepper" aria-label="Etape joc">
     <ol>
-      <li data-phase="pour"     class="active">🫙 Turnare</li>
+      <li data-phase="pour"     class="active">🍯 Turnare</li>
       <li data-phase="decorate">🍬 Decor</li>
       <li data-phase="bake">🔥 Coacere</li>
       <li data-phase="serve">🧁 Servire</li>
