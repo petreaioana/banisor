@@ -104,7 +104,7 @@ if (is_array($diskSeed)) {
       <span class="sep">•</span>
       <button id="btn-import-manual" class="btn">📥 Import Joc manual</button>
 
-      <a class="btn" href="game.php">🎮 Joc manual</a>
+      <a class="btn" href="game.php">🎮 Start Joc</a>
     </div>
   </header>
 
@@ -216,8 +216,7 @@ if (is_array($diskSeed)) {
   <!-- Bara stații jos -->
   <footer id="stationbar" role="contentinfo">
     <div class="station active">Auto-Sim</div>
-    <a class="station" href="game.php">Joc Manual</a>
-    <div class="station">Raport</div>
+    <a class="station" href="game.php">Start Joc</a>
   </footer>
 
   <noscript>Este nevoie de JavaScript pentru a rula simulatorul.</noscript>
