@@ -1,13 +1,13 @@
 {
-    "lei": 600,
-    "day": 7,
+    "lei": 100,
+    "day": 9,
     "progress": {
         "cookies": {
-            "day": 7,
+            "day": 9,
             "profitBest": 0
         }
     },
     "meta": {
-        "when": 1790339288521
+        "when": 1790343185400
     }
 }
