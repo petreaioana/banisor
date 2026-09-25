@@ -19,7 +19,7 @@
     { id: 'puzzle', icon: '🧩', category: 'Planificare', title: 'Pușculița ordonată', description: 'Refă imaginea și găsește locul fiecărei piese.', coach: 'Caută întâi colțurile, apoi marginile. Imaginea se leagă treptat.' },
     { id: 'color_lab', icon: '🎨', category: 'Idei', title: 'Laboratorul culorilor', description: 'Combină culori și descoperă rezultatul.', coach: 'Privește cele două culori ca pe două ingrediente ale aceleiași idei.' },
     { id: 'entrepreneur', icon: '🛍️', category: 'Afaceri', title: 'Micul magazin', description: 'Alege un preț care acoperă costul și ajută clientul.', coach: 'Prețul trebuie să țină cont de cost, nevoie și buget.' },
-    { id: 'clock', icon: '⏰', category: 'Timp', title: 'Ceasul isteț', description: 'Pune numerele la loc și citește ora de pe cadran.', coach: 'Privește acele și alege cu atenție.' },
+    { id: 'clock', icon: '⏰', category: 'Timp', title: 'Ceasul isteț', description: 'Pune numerele la loc și citește ora de pe cadran.', coach: 'Privește cadranul și lucrează cu atenție.' },
   ];
 
   let progress = { version: 1, games: {} };
@@ -491,12 +491,96 @@
     function choose(button, price, options, card, round) { if (answered) return; answered = true; const good = price === round.correct; if (good) score += 1; options.querySelectorAll('button').forEach(item => { item.disabled = true; }); button.classList.add(good ? 'correct' : 'wrong'); const profit = price - round.cost; const feedback = make('div', `feedback ${good ? 'good' : 'warn'}`, good ? `Alegere echilibrată. Rămân ${profit} lei înainte de alte costuri.` : 'Alegerea nu acoperă bine costul și bugetul. Compară-le înainte de următoarea rundă.'); card.append(feedback); const next = make('button', 'primary-button', index === rounds.length - 1 ? 'Vezi rezultatul' : 'Următoarea rundă'); next.type = 'button'; next.style.marginTop = '14px'; next.addEventListener('click', () => { index += 1; answered = false; if (index >= rounds.length) finishGame((score / rounds.length) * 100, `${score} alegeri echilibrate din ${rounds.length}.`); else render(); }); card.append(next); }
   }
 
-  function clockFace(root, hour, minute) {
-    const face = make('div', 'clock-face');
-    for (let number = 1; number <= 12; number += 1) { const angle = (number / 12) * Math.PI * 2 - Math.PI / 2; const node = make('span', 'clock-number', String(number)); node.style.left = `${50 + Math.cos(angle) * 39}%`; node.style.top = `${50 + Math.sin(angle) * 39}%`; face.append(node); }
-    const hourHand = make('span', 'clock-hand hour'); hourHand.style.transform = `rotate(${((hour % 12) + minute / 60) * 30}deg)`;
-    const minuteHand = make('span', 'clock-hand minute'); minuteHand.style.transform = `rotate(${minute * 6}deg)`;
-    face.append(hourHand, minuteHand, make('span', 'clock-center')); return face;
+  function clockFace(hour, minute, options = {}) {
+    const interactive = Boolean(options.interactive);
+    const face = make('div', `clock-face${interactive ? ' interactive-clock' : ''}`);
+    face.setAttribute('role', interactive ? 'application' : 'img');
+    face.setAttribute('aria-label', interactive ? 'Ceas reglabil' : 'Ceas model');
+    for (let number = 1; number <= 12; number += 1) {
+      const angle = (number / 12) * Math.PI * 2 - Math.PI / 2;
+      const node = make('span', 'clock-number', String(number));
+      node.style.left = `${50 + Math.cos(angle) * 39}%`;
+      node.style.top = `${50 + Math.sin(angle) * 39}%`;
+      face.append(node);
+    }
+
+    const hourHand = make('span', 'clock-hand hour');
+    const minuteHand = make('span', 'clock-hand minute');
+    const center = make('span', 'clock-center');
+    hourHand.dataset.hand = 'hour';
+    minuteHand.dataset.hand = 'minute';
+
+    let currentHour = hour;
+    let currentMinute = minute;
+    let activeHand = null;
+
+    function renderHands() {
+      hourHand.style.transform = `rotate(${((currentHour % 12) + currentMinute / 60) * 30}deg)`;
+      minuteHand.style.transform = `rotate(${currentMinute * 6}deg)`;
+    }
+
+    function angleFromEvent(event) {
+      const rect = face.getBoundingClientRect();
+      const x = event.clientX - (rect.left + rect.width / 2);
+      const y = event.clientY - (rect.top + rect.height / 2);
+      return (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
+    }
+
+    function circularDistance(first, second) {
+      const distance = Math.abs(first - second) % 360;
+      return Math.min(distance, 360 - distance);
+    }
+
+    function updateFromEvent(event) {
+      if (!activeHand) return;
+      const angle = angleFromEvent(event);
+      if (activeHand === 'minute') {
+        currentMinute = Math.round(angle / 90) * 15 % 60;
+      } else {
+        const nextHour = Math.round(angle / 30 - currentMinute / 60) % 12;
+        currentHour = nextHour || 12;
+      }
+      renderHands();
+      options.onChange?.(currentHour, currentMinute);
+    }
+
+    function stopDragging(event) {
+      if (!activeHand) return;
+      try { face.releasePointerCapture?.(event.pointerId); } catch (_) {}
+      activeHand = null;
+      face.classList.remove('dragging');
+    }
+
+    if (interactive) {
+      face.tabIndex = 0;
+      face.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        const selectedHand = event.target.closest?.('.clock-hand')?.dataset.hand;
+        if (selectedHand) {
+          activeHand = selectedHand;
+        } else {
+          const angle = angleFromEvent(event);
+          const hourAngle = ((currentHour % 12) + currentMinute / 60) * 30;
+          const minuteAngle = currentMinute * 6;
+          activeHand = circularDistance(angle, minuteAngle) <= circularDistance(angle, hourAngle) ? 'minute' : 'hour';
+        }
+        face.setPointerCapture?.(event.pointerId);
+        face.classList.add('dragging');
+        updateFromEvent(event);
+      });
+      face.addEventListener('pointermove', event => {
+        if (activeHand) {
+          event.preventDefault();
+          updateFromEvent(event);
+        }
+      });
+      face.addEventListener('pointerup', stopDragging);
+      face.addEventListener('pointercancel', stopDragging);
+    }
+
+    renderHands();
+    face.append(hourHand, minuteHand, center);
+    return face;
   }
 
   function initClock(root) {
@@ -507,7 +591,65 @@
     render(); return cleanup;
     function render() { root.replaceChildren(); root.append(stageIntro('Timp', 'Ceasul isteț are două provocări.', 'Pune numerele la loc sau citește ora de pe cadran.')); const tabs = make('div', 'clock-tabs'); [['numbers', 'Pune numerele'], ['alarm', 'Potrivește ora']].forEach(([value, label]) => { const button = make('button', value === mode ? 'active' : '', label); button.type = 'button'; button.addEventListener('click', () => { mode = value; selected = null; answered = false; render(); }); tabs.append(button); }); root.append(tabs); if (mode === 'numbers') renderNumbers(); else renderAlarm(); }
     function renderNumbers() { const board = make('div', 'number-puzzle'); numberOrder.forEach((value, index) => { const button = make('button', selected === index ? 'selected' : '', String(value)); button.type = 'button'; button.addEventListener('click', () => { if (selected === null) { selected = index; render(); return; } if (selected === index) { selected = null; render(); return; } [numberOrder[selected], numberOrder[index]] = [numberOrder[index], numberOrder[selected]]; selected = null; render(); if (numberOrder.every((item, itemIndex) => item === itemIndex + 1)) finishGame(100, 'Numerele sunt în ordine, de la 1 la 12.'); }); board.append(button); }); root.append(board); root.append(make('p', 'puzzle-hint', 'Alege două numere pentru a le schimba locul.')); setCoach(getMission('clock').coach, numberOrder.filter((value, index) => value === index + 1).length / 12, 'Numere corect așezate'); }
-    function renderAlarm() { const time = times[round]; const card = make('section', 'clock-card'); card.append(clockFace(root, time.hour, time.minute)); card.append(make('p', 'question-number', `Runda ${round + 1} din ${times.length}`)); card.append(make('h3', '', 'Privește acele și alege ora.')); const controls = make('div', 'clock-controls'); const hourLabel = make('label', '', 'Ora'); const minuteLabel = make('label', '', 'Minute'); const hourSelect = make('select'); const minuteSelect = make('select'); for (let hour = 1; hour <= 12; hour += 1) { const option = make('option', '', String(hour).padStart(2, '0')); option.value = String(hour); hourSelect.append(option); } [0, 15, 30, 45].forEach(minute => { const option = make('option', '', String(minute).padStart(2, '0')); option.value = String(minute); minuteSelect.append(option); }); hourLabel.append(hourSelect); minuteLabel.append(minuteSelect); controls.append(hourLabel, minuteLabel); card.append(controls); const feedback = make('div', 'feedback', 'Alege ora și minutele.'); feedback.setAttribute('aria-live', 'polite'); card.append(feedback); const check = make('button', 'primary-button', 'Verifică ora'); check.type = 'button'; check.style.marginTop = '16px'; check.addEventListener('click', () => { if (answered) return; answered = true; const good = Number(hourSelect.value) === time.hour && Number(minuteSelect.value) === time.minute; if (good) score += 1; feedback.className = `feedback ${good ? 'good' : 'warn'}`; feedback.textContent = good ? 'Ora este potrivită.' : 'Acele nu se potrivesc. Privește din nou cadranul.'; check.disabled = true; const next = make('button', 'secondary-button', round === times.length - 1 ? 'Vezi rezultatul' : 'Următoarea rundă'); next.type = 'button'; next.style.marginLeft = '8px'; next.addEventListener('click', () => { round += 1; answered = false; if (round >= times.length) finishGame((score / times.length) * 100, `${score} ore potrivite din ${times.length}.`); else render(); }); check.after(next); }); card.append(check); root.append(card); hourSelect.addEventListener('change', () => updateClockPreview()); minuteSelect.addEventListener('change', () => updateClockPreview()); function updateClockPreview() { const currentFace = $('.clock-face', card); if (currentFace) currentFace.replaceWith(clockFace(card, Number(hourSelect.value), Number(minuteSelect.value))); } setCoach(getMission('clock').coach, round / times.length, `Runda ${round + 1} din ${times.length}`); }
+    function renderAlarm() {
+      const time = times[round];
+      const starts = [{ hour: 9, minute: 30 }, { hour: 2, minute: 0 }, { hour: 5, minute: 45 }];
+      const start = starts[round] || starts[0];
+      const card = make('section', 'clock-card');
+      const practice = make('div', 'clock-practice-grid');
+
+      const targetPanel = make('div', 'clock-panel');
+      targetPanel.append(make('p', 'eyebrow', 'Ceas-model'));
+      targetPanel.append(clockFace(time.hour, time.minute));
+      targetPanel.append(make('p', 'puzzle-hint', 'Citește ora de pe acest cadran.'));
+
+      let playerHour = start.hour;
+      let playerMinute = start.minute;
+      const playerPanel = make('div', 'clock-panel');
+      playerPanel.append(make('p', 'eyebrow', 'Ceasul tău'));
+      const playerFace = clockFace(playerHour, playerMinute, {
+        interactive: true,
+        onChange: (hour, minute) => {
+          playerHour = hour;
+          playerMinute = minute;
+        },
+      });
+      playerPanel.append(playerFace);
+      playerPanel.append(make('p', 'puzzle-hint', 'Trage de ace până când ceasul tău arată la fel ca modelul.'));
+      practice.append(targetPanel, playerPanel);
+      card.append(practice);
+      card.append(make('p', 'question-number', `Runda ${round + 1} din ${times.length}`));
+
+      const feedback = make('div', 'feedback', 'Reglează acele, apoi verifică ceasul.');
+      feedback.setAttribute('aria-live', 'polite');
+      card.append(feedback);
+
+      const check = make('button', 'primary-button', 'Verifică ceasul');
+      check.type = 'button';
+      check.style.marginTop = '16px';
+      check.addEventListener('click', () => {
+        if (answered) return;
+        answered = true;
+        const good = playerHour === time.hour && playerMinute === time.minute;
+        if (good) score += 1;
+        feedback.className = `feedback ${good ? 'good' : 'warn'}`;
+        feedback.textContent = good ? 'Cele două ceasuri arată la fel.' : 'Acele nu se potrivesc. Compară cele două cadrane.';
+        check.disabled = true;
+        const next = make('button', 'secondary-button', round === times.length - 1 ? 'Vezi rezultatul' : 'Următoarea rundă');
+        next.type = 'button';
+        next.style.marginLeft = '8px';
+        next.addEventListener('click', () => {
+          round += 1;
+          answered = false;
+          if (round >= times.length) finishGame((score / times.length) * 100, `${score} ceasuri potrivite din ${times.length}.`);
+          else render();
+        });
+        check.after(next);
+      });
+      card.append(check);
+      root.append(card);
+      setCoach(getMission('clock').coach, round / times.length, `Runda ${round + 1} din ${times.length}`);
+    }
   }
 
   const gameInitializers = { quiz: initQuiz, maze: initMaze, coins: initCoins, barter: initBarter, number_path: initNumberPath, puzzle: initPuzzle, color_lab: initColorLab, entrepreneur: initEntrepreneur, clock: initClock };

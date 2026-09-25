@@ -6,7 +6,7 @@ if (empty($_SESSION['minigames_csrf'])) {
     $_SESSION['minigames_csrf'] = bin2hex(random_bytes(32));
 }
 $csrf = $_SESSION['minigames_csrf'];
-$cssVersion = (int)filemtime(__DIR__ . '/game_assets/css/minigames.css');
+$cssVersion = md5_file(__DIR__ . '/game_assets/css/minigames.css');
 $jsVersion = md5_file(__DIR__ . '/game_assets/js/minigames.js');
 ?>
 <!doctype html>
