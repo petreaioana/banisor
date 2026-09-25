@@ -65,6 +65,7 @@ if (is_array($diskSeed)) {
   <!-- Stiluri -->
   <link rel="stylesheet" href="dashboard_assets/styles/base.css" />
   <link rel="stylesheet" href="dashboard_assets/styles/dashboard.css" />
+  <link rel="stylesheet" href="dashboard_assets/styles/kid-friendly.css?v=<?php echo (int)filemtime(__DIR__.'/dashboard_assets/styles/kid-friendly.css'); ?>" />
 
   <!-- Seed server (opțional; va fi folosit de FK în state.js) -->
   <script>
@@ -72,7 +73,7 @@ if (is_array($diskSeed)) {
   </script>
 
   <!-- Motor autosim (importă FK din dashboard_assets/js/shared/state.js) -->
-  <script type="module" src="dashboard_assets/js/dashboard/engine.js" defer></script>
+  <script type="module" src="dashboard_assets/js/dashboard/engine.js?v=<?php echo (int)filemtime(__DIR__.'/dashboard_assets/js/dashboard/engine.js'); ?>" defer></script>
 
   <noscript><style>main, .layout { display:none; }</style></noscript>
 </head>
@@ -80,7 +81,7 @@ if (is_array($diskSeed)) {
   <!-- Topbar -->
   <header id="topbar" role="banner">
     <div class="left">
-      <a class="brand" href="/">🍪 FinKids Tycoon</a>
+      <a class="brand" href="index.php">🍪 FinKids Tycoon</a>
       <span class="sep">•</span>
       <span id="day-clock">Ziua <b id="top-day">1</b> · <span id="top-time">08:00</span></span>
       <button id="btn-pause" class="btn" type="button">⏸️ Pauză</button>
@@ -174,7 +175,7 @@ if (is_array($diskSeed)) {
     <!-- Coloana centrală: scenă -->
     <main id="center" role="main" aria-label="Scenă magazin">
       <div id="scene" class="scene scene-shop">
-        <div id="ticker" class="order-ticket">Auto-sim activ…</div>
+        <div id="ticker" class="order-ticket">Magazin deschis</div>
         <div id="banisor-corner" class="banisor-counter"></div>
       </div>
     </main>
@@ -217,6 +218,7 @@ if (is_array($diskSeed)) {
   <footer id="stationbar" role="contentinfo">
     <div class="station active">Auto-Sim</div>
     <a class="station" href="game.php">Start Joc</a>
+    <a class="station" href="minigames.php">Provocări</a>
   </footer>
 
   <noscript>Este nevoie de JavaScript pentru a rula simulatorul.</noscript>

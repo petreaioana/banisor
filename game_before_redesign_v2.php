@@ -15,7 +15,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FinKids Tycoon — Joc manual</title>
   <meta name="color-scheme" content="light only" />
-  <link rel="stylesheet" href="game_assets/css/game.css?v=5" />
+  <link rel="stylesheet" href="game_assets/css/game.css" />
 </head>
 <body>
   <!-- Topbar -->
@@ -33,7 +33,6 @@
       ⚡ Boost: <b id="g-boost">0%</b>
     </div>
     <div class="right">
-      <a class="btn secondary" href="minigames.php">🧩 Provocări</a>
       <button id="btn-prev" class="btn secondary">⟵ Înapoi</button>
       <button id="btn-next" class="btn">Înainte ⟶</button>
     </div>
@@ -50,7 +49,7 @@
   </nav>
 
   <!-- Content -->
-  <main id="game-layout" class="game-layout" role="main" data-phase="pour">
+  <main class="game-layout" role="main">
     <!-- Left: Order -->
     <section class="game-panel" aria-labelledby="h-order">
       <h3 id="h-order">Comandă curentă</h3>
@@ -71,8 +70,12 @@
       </div>
       <hr>
       <div class="panel soft small">
-        <b>Trucul lui Bănișor:</b>
-        <div style="margin-top:.25rem">Umple zona verde, adaugă toppingurile cerute și oprește cuptorul la timp.</div>
+        <b>Tips de la Bănișor:</b>
+        <ul style="margin:.25rem 0 .25rem 1.2rem">
+          <li>Umple forma până la dungulița verde.</li>
+          <li>Pune toppingurile cerute, răspândite frumos.</li>
+          <li>Oprește cuptorul în fereastra verde pentru bonus ✨.</li>
+        </ul>
       </div>
       <hr>
       <div class="panel soft small">
@@ -131,7 +134,7 @@
     </section>
 
     <!-- Right: Bake & Serve -->
-    <section id="bake-serve-panel" class="game-panel hidden" aria-labelledby="h-bake-serve">
+    <section class="game-panel" aria-labelledby="h-bake-serve">
       <h3 id="h-bake-serve">Bake & Serve</h3>
 
       <div class="bake-panel tools--phase hidden" data-phase="bake" aria-live="polite">
@@ -171,10 +174,14 @@
   <!-- Footer -->
   <footer class="game-footer" role="contentinfo">
     <div class="left small muted">Apasă <b>Space</b> în etapa de coacere pentru a opri rapid.</div>
+    <div class="right">
+      <button id="btn-prev" class="btn secondary">⟵ Înapoi</button>
+      <button id="btn-next" class="btn">Înainte ⟶</button>
+    </div>
   </footer>
 
   <div class="toast-container" aria-live="polite"></div>
 
-  <script src="game_assets/js/game.js?v=3"></script>
+  <script src="game_assets/js/game.js"></script>
 </body>
 </html>

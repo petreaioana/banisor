@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-label="Pușculiță cu monede și borcan de economii">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff5cf"/>
+      <stop offset="1" stop-color="#f3d27a"/>
+    </linearGradient>
+    <linearGradient id="jar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a7e3db" stop-opacity=".86"/>
+      <stop offset="1" stop-color="#55b6b1" stop-opacity=".86"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="300" rx="28" fill="url(#paper)"/>
+  <circle cx="52" cy="50" r="22" fill="#f8c34f"/>
+  <circle cx="52" cy="50" r="14" fill="none" stroke="#b87825" stroke-width="4"/>
+  <path d="M74 50h-15" stroke="#b87825" stroke-width="4" stroke-linecap="round"/>
+  <path d="M73 184c0-47 35-78 78-78h25c43 0 78 31 78 78v46c0 21-17 38-38 38H111c-21 0-38-17-38-38z" fill="url(#jar)" stroke="#286c70" stroke-width="8"/>
+  <path d="M93 171h141" stroke="#d8f8e9" stroke-width="7" opacity=".75"/>
+  <path d="M101 128c18-25 40-33 66-33 25 0 47 8 65 33" fill="none" stroke="#286c70" stroke-width="8" stroke-linecap="round"/>
+  <rect x="126" y="84" width="83" height="21" rx="10" fill="#286c70"/>
+  <rect x="141" y="86" width="54" height="7" rx="3.5" fill="#e7fbef" opacity=".8"/>
+  <circle cx="128" cy="201" r="19" fill="#f8c34f" stroke="#b87825" stroke-width="5"/>
+  <circle cx="177" cy="222" r="19" fill="#e9a646" stroke="#a9692c" stroke-width="5"/>
+  <circle cx="214" cy="197" r="18" fill="#f8c34f" stroke="#b87825" stroke-width="5"/>
+  <path d="M128 195v12M122 201h12" stroke="#b87825" stroke-width="3" stroke-linecap="round"/>
+  <path d="M177 215v14M170 222h14" stroke="#a9692c" stroke-width="3" stroke-linecap="round"/>
+  <path d="M214 191v12M208 197h12" stroke="#b87825" stroke-width="3" stroke-linecap="round"/>
+  <path d="M87 267h134" stroke="#b97838" stroke-width="8" stroke-linecap="round" opacity=".45"/>
+  <path d="M230 62l7 15 16 2-12 11 3 16-14-8-14 8 3-16-12-11 16-2z" fill="#ef9a63"/>
+</svg>

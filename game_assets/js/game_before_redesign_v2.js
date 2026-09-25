@@ -73,7 +73,7 @@ const state = {
   baking:{ running:false, dur: 2800+Math.floor(Math.random()*900), p:0, zone:[0.52,0.62], inWin:false, attempted:false, locked:false },
   scores:{ pour:0, top:0, bake:0, q:0, qty:0 },
 };
-let bakeTimer=null, pourTimer=null, serving=false;
+let bakeTimer=null, pourTimer=null;
 
 // ---------- Audio ----------
 let audioOn = true;
@@ -185,11 +185,7 @@ function openStageModal({title, emoji='✨', score=0, detailsHTML='', badges=[],
 
 // ---------- UI helpers ----------
 function setPhase(next){
-  if(!PHASES.includes(next)) return;
-  if(next!=='pour') stopPour();
   state.phase = next;
-  $('#game-layout') && ($('#game-layout').dataset.phase = next);
-  $('#bake-serve-panel')?.classList.toggle('hidden', next!=='bake' && next!=='serve');
 
   // Stepper
   $$('#stepper li').forEach(li=>{
@@ -209,7 +205,7 @@ function setPhase(next){
   // Buttons
   const canBakeStart = next==='bake' && !state.baking.locked && !state.baking.running;
   const canBakeStop  = next==='bake' && state.baking.running;
-  const canServe     = next==='serve' && !serving;
+  const canServe     = next==='serve';
 
   $('#btn-bake-start')?.toggleAttribute('disabled', !canBakeStart);
   $('#btn-bake-stop') ?.toggleAttribute('disabled', !canBakeStop);
@@ -417,9 +413,7 @@ function stopBake(){
 
 // ---------- Serve ----------
 async function serveClient(){
-  if(state.phase!=='serve' || serving){ toast('Finalizează coacerea înainte de servire.'); return; }
-  serving=true;
-  $('#btn-serve')?.setAttribute('disabled','true');
+  if(state.phase!=='serve'){ toast('Finalizează coacerea înainte de servire.'); return; }
   computeFinalScores();
   const q=state.scores.q||0.86, qty=state.scores.qty||8;
   const inWin = !!state.baking.inWin;
@@ -438,9 +432,6 @@ async function serveClient(){
     }
   }catch(e){
     console.error(e); toast('Eroare de rețea la servire.');
-  }finally{
-    serving=false;
-    if(state.phase==='serve') $('#btn-serve')?.removeAttribute('disabled');
   }
 }
 
@@ -473,11 +464,6 @@ async function refreshTopbar(){
 }
 
 function newOrder(){
-  stopPour();
-  clearInterval(bakeTimer); bakeTimer=null;
-  $('#bake-bar') && ($('#bake-bar').style.width='0%');
-  $('#oven-img')?.setAttribute('src','game_assets/images/oven_open.png');
-  $('#oven-img')?.classList.remove('shake');
   const map={1:'S',2:'M',3:'L'};
   const slider=$('#size-range');
   state.sizeKey = map[ Number(slider?.value||2) ] || 'M';
@@ -603,19 +589,8 @@ function wireEvents(){
   $('#btn-new-order')?.addEventListener('click', ()=>{ newOrder(); setPhase('pour'); });
 
   // Pour
-  $('#btn-pour-hold')?.addEventListener('pointerdown', (e)=>{
-    if(state.phase!=='pour') return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    stopPour();
-    pourTimer=setInterval(()=>{
-      state.fillPct=clamp(state.fillPct+0.01,0,1);
-      updateFillUI();
-      if(state.fillPct>=1) stopPour();
-    },70);
-  });
-  ['pointerup','pointercancel','lostpointercapture'].forEach(ev => $('#btn-pour-hold')?.addEventListener(ev, stopPour));
-  window.addEventListener('blur', stopPour);
+  $('#btn-pour-hold')?.addEventListener('pointerdown', (e)=>{ e.preventDefault(); clearInterval(pourTimer); pourTimer=setInterval(()=>{ state.fillPct=clamp(state.fillPct+0.01,0,1); updateFillUI(); }, 70); });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => $('#btn-pour-hold')?.addEventListener(ev, ()=>{ clearInterval(pourTimer); pourTimer=null; }));
   $('#pour-range')?.addEventListener('input', (e)=>{ const v=Number(e.target.value||0); state.fillPct=clamp(v/100,0,1); updateFillUI(); });
 
   // Decor
@@ -638,18 +613,8 @@ function wireEvents(){
 
   // Reset
   $('#btn-reset')?.addEventListener('click', async ()=>{
-    try{
-      stopPour();
-      clearInterval(bakeTimer); bakeTimer=null;
-      await FK.reset();
-      newOrder(); setPhase('pour');
-      await refreshTopbar(); toast('Jocul a fost resetat.');
-    }catch(_){ toast('Resetarea nu a reușit.'); }
+    try{ await FK.reset(); await refreshTopbar(); toast('Sesiune resetată.'); }catch(_){}
   });
-}
-
-function stopPour(){
-  if(pourTimer){ clearInterval(pourTimer); pourTimer=null; }
 }
 
 // ---------- Init ----------

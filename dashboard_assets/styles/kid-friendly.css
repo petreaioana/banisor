@@ -1,0 +1,30 @@
+/* Ajustări ușoare pentru citire și atingere, păstrând scena și mecanicile existente. */
+#topbar { flex-wrap: wrap; padding: .6rem 1rem; background: #f9d678; }
+#topbar .left, #topbar .right, #topbar .speed { flex-wrap: wrap; }
+#topbar .right { justify-content: flex-end; }
+.layout { padding-bottom: 66px; }
+#left-controls, #right-metrics { font-size: .94rem; }
+#left-controls h3, #right-metrics h3 { color: #274d47; letter-spacing: -.015em; }
+#left-controls .row { padding: .15rem 0; }
+#left-controls input[type="number"], #left-controls input[type="time"], #left-controls select { min-height: 36px; }
+#center { min-height: min(70vh, 760px); border-color: #d4ad59; box-shadow: 0 9px 25px rgba(105, 73, 22, .10); }
+.order-ticket { max-width: calc(100% - 1rem); color: #294d48; border-color: #d2ad5f; }
+#right-metrics { border-color: #d4ad59; }
+#stationbar { gap: .55rem; padding: .55rem .7rem; background: rgba(42, 48, 45, .95); backdrop-filter: blur(5px); }
+#stationbar .station { min-height: 36px; padding: .45rem 1rem; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; font-weight: 750; }
+#stationbar .station:focus-visible { outline: 3px solid #ffe39a; outline-offset: 2px; }
+@media (max-width: 1100px) {
+  #topbar .right { flex: 1 1 100%; justify-content: flex-start; }
+  #center { min-height: 62vh; }
+}
+@media (max-width: 780px) {
+  #topbar { position: static; }
+  #topbar .left, #topbar .right { width: 100%; justify-content: flex-start; }
+  #topbar .brand { font-size: 1.03rem; }
+  #center { min-height: 64vh; }
+  #stationbar { justify-content: stretch; }
+  #stationbar .station { flex: 1 1 0; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banisor-sprite .hand-wave, .banisor-sprite .eye, .banisor-sprite .hat { animation: none; }
+}

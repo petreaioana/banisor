@@ -489,8 +489,8 @@ export const FK = (() => {
   function _makeDailyQuests() {
     const w = S.world || { season: 'primavara', day: 1 };
     const q1 = { id: `dq_sold_${w.season}_${w.day}`, label: 'Vinde 120 bucăți azi', type: 'sold', progress: 0, target: 120, reward: { cash: 120 }, status: 'active', expires: { season: w.season, day: w.day } };
-    const q2 = { id: `dq_quality_${w.season}_${w.day}`, label: 'Q medie ≥ 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } };
-    const q3 = { id: `dq_wait_${w.season}_${w.day}`, label: 'Timp mediu W ≤ 2.0', type: 'wait', progress: 0, target: 2.0, reward: { cash: 80 }, status: 'active', expires: { season: w.season, day: w.day } };
+    const q2 = { id: `dq_quality_${w.season}_${w.day}`, label: 'Q medie, cel puțin 0.90', type: 'qavg', progress: 0, target: 0.90, reward: { buff: { id: 'qualityStar', label: 'Calitate de top', minutes: 60, qBonus: 0.02 } }, status: 'active', expires: { season: w.season, day: w.day } };
+    const q3 = { id: `dq_wait_${w.season}_${w.day}`, label: 'Timp mediu W, cel mult 2.0', type: 'wait', progress: 0, target: 2.0, reward: { cash: 80 }, status: 'active', expires: { season: w.season, day: w.day } };
     return [q1, q2, q3];
   }
   function ensureDailyQuests() {

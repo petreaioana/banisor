@@ -447,7 +447,7 @@ function mount(){
   hydrateControls();
 
   if(banCorner){ try{ banCorner.innerHTML=''; banCorner.appendChild(buildBanisorSprite(120)); }catch(_){ } }
-  if(ticker) ticker.textContent='Auto-sim '+(FK.getState().autosim?.running? 'activ' : 'în pauză');
+  if(ticker) ticker.textContent=FK.getState().autosim?.running ? 'Magazin deschis' : 'Simulare în pauză';
 
   // UI adițională
   try{ mountSeasonCard(); }catch(_){}
@@ -465,7 +465,7 @@ function updateTickerBadge(){
     const S=FK.getState();
     const evs = FK.todayEvents ? FK.todayEvents() : [];
     const evTxt = evs.length? ` · 🎪 ${evs.map(e=>e.label||e.id).join(' + ')}` : '';
-    const label = 'Manager '+(S.autosim?.running? 'activ…' : 'în pauză');
+    const label = S.autosim?.running ? 'Magazin deschis' : 'Simulare în pauză';
     t.textContent = `${label}${evTxt}`;
   }catch(_){}
 }
@@ -661,13 +661,13 @@ function mountEventsCard(){
     if(!host || document.getElementById('card-events')) return;
     const card=document.createElement('div'); card.id='card-events'; card.className='panel soft';
     card.innerHTML=`<h3 style="margin-top:0">Evenimente</h3>
-      <div id="ev-today" class="small muted">azi: —</div>
+      <div id="ev-today" class="small muted">azi: nicio activitate</div>
       <div id="ev-upcoming" class="small" style="margin-top:.35rem"></div>`;
     host.appendChild(card);
     const refresh=()=>{
       const evs = (FK.todayEvents&&FK.todayEvents())||[];
       const wrap=document.getElementById('ev-today');
-      if(evs.length===0){ wrap.textContent='azi: —'; }
+      if(evs.length===0){ wrap.textContent='azi: nicio activitate'; }
       else{
         wrap.innerHTML = 'azi: ' + evs.map(e=>{
           const joinBtn = (e.type==='festival')? ` <button class="btn small ev-join" data-id="${e.id}">Participă (${e.cost||0})</button>` : '';
@@ -676,7 +676,7 @@ function mountEventsCard(){
       }
       const up=(FK.listUpcomingEvents&&FK.listUpcomingEvents(7))||[];
       const box=document.getElementById('ev-upcoming');
-      box.innerHTML = up.length? ('urmează: ' + up.map(x=> `${x.season.slice(0,3)}-${x.day}: ${x.label||x.id}`).join(' · ')) : '—';
+      box.innerHTML = up.length? ('urmează: ' + up.map(x=> `${x.season.slice(0,3)}-${x.day}: ${x.label||x.id}`).join(' · ')) : 'nu urmează activități';
       // bind joins
       document.querySelectorAll('.ev-join').forEach(b=>{
         b.addEventListener('click', ()=>{
@@ -708,16 +708,17 @@ function mountQuestsCard(){
       };
       box.innerHTML = qs.map(q=>{
         let prog = q.type==='sold'? `${q.progress}/${q.target}` :
-                   q.type==='qavg'? `${Number(q.progress||0).toFixed(2)}≥${q.target}` :
-                   q.type==='wait'? `${Number(q.progress||0).toFixed(2)}≤${q.target}` : '';
+                   q.type==='qavg'? `${Number(q.progress||0).toFixed(2)} din ${q.target}` :
+                   q.type==='wait'? `${Number(q.progress||0).toFixed(2)} din maximum ${q.target}` : '';
         const isReady = q.status==='ready';
         const btn = isReady? `<button class="btn small q-claim" data-id="${q.id}">Revendică</button>` : '';
         const meter = q.type==='sold'? bar(q.progress,q.target)
                     : q.type==='qavg'? bar(q.progress, q.target)
                     : q.type==='wait'? bar(q.progress, q.target, true) : '';
         const reward = q.reward?.cash? (`+${q.reward.cash} lei`) : (q.reward?.buff? (q.reward.buff.label||'buff') : '');
+        const label = String(q.label || '').replace('≥', 'cel puțin').replace('≤', 'cel mult');
         return `<div style="display:grid;grid-template-columns:1fr auto;gap:.4rem;align-items:center;margin:.25rem 0">
-          <div><b>${q.label}</b><div class="small muted">${prog} · reward: ${reward}</div>${meter}</div>
+          <div><b>${label}</b><div class="small muted">${prog} · reward: ${reward}</div>${meter}</div>
           <div>${btn}</div>
         </div>`;
       }).join('');
@@ -826,7 +827,7 @@ mount();
 
 // ---------- Micro-tweaks post-mount ----------
 try{
-  const t=document.getElementById('ticker'); if(t) t.textContent='Manager activ…';
+  const t=document.getElementById('ticker'); if(t) t.textContent='Magazin deschis';
   const st=document.querySelector('#stationbar .station.active'); if(st) st.textContent='Manager';
 }catch(_){}
 

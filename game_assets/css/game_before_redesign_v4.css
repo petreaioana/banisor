@@ -277,8 +277,6 @@ footer.game-footer{max-width:1392px;margin:0 auto;padding:4px 16px 16px}
   header#topbar{display:grid;grid-template-columns:minmax(0,1fr);justify-content:stretch}
   header#topbar .left,header#topbar .right{justify-content:flex-start}
   header#topbar .right:last-child{justify-content:space-between}
-  #stepper ol{flex-wrap:wrap;overflow:visible}
-  #stepper li{flex:1 1 calc(50% - .6rem);justify-content:center}
   .game-layout,.game-layout[data-phase="pour"],.game-layout[data-phase="decorate"],.game-layout[data-phase="bake"],.game-layout[data-phase="serve"]{grid-template-columns:minmax(0,1fr);padding:12px;gap:12px}
   .game-panel:last-child{order:initial}
   .build-stage{height:clamp(250px,62vw,340px)}

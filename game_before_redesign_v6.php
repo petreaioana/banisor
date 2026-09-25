@@ -33,7 +33,6 @@
       ⚡ Boost: <b id="g-boost">0%</b>
     </div>
     <div class="right">
-      <a class="btn secondary" href="minigames.php">🧩 Provocări</a>
       <button id="btn-prev" class="btn secondary">⟵ Înapoi</button>
       <button id="btn-next" class="btn">Înainte ⟶</button>
     </div>
@@ -175,6 +174,6 @@
 
   <div class="toast-container" aria-live="polite"></div>
 
-  <script src="game_assets/js/game.js?v=3"></script>
+  <script src="game_assets/js/game.js"></script>
 </body>
 </html>

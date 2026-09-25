@@ -238,8 +238,6 @@ header .brand{font-size:1.05rem}
 .panel{border:1px solid #eee8d9;background:#fbfaf6}
 .build-stage{height:360px;background:#fff;border:1px solid #e9e5dc;border-radius:14px}
 .shape{filter:drop-shadow(0 2px 3px rgba(44,36,20,.12))}
-.shape--circle .shape-base{border-radius:50%}
-.shape--circle .shape-fill{border-radius:0 0 50% 50%}
 .shape-fill{background:repeating-linear-gradient(180deg,#f5c66e 0 8px,#edb75d 8px 16px)}
 .canvas-controls{background:#fbfaf6;border:1px solid #eee8d9}
 .palette{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -274,11 +272,6 @@ footer.game-footer{max-width:1392px;margin:0 auto;padding:4px 16px 16px}
 }
 @media(max-width:860px){
   header#topbar{padding:10px 14px}
-  header#topbar{display:grid;grid-template-columns:minmax(0,1fr);justify-content:stretch}
-  header#topbar .left,header#topbar .right{justify-content:flex-start}
-  header#topbar .right:last-child{justify-content:space-between}
-  #stepper ol{flex-wrap:wrap;overflow:visible}
-  #stepper li{flex:1 1 calc(50% - .6rem);justify-content:center}
   .game-layout,.game-layout[data-phase="pour"],.game-layout[data-phase="decorate"],.game-layout[data-phase="bake"],.game-layout[data-phase="serve"]{grid-template-columns:minmax(0,1fr);padding:12px;gap:12px}
   .game-panel:last-child{order:initial}
   .build-stage{height:clamp(250px,62vw,340px)}

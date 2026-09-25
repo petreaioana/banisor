@@ -525,6 +525,9 @@ function canGoNextFrom(phase){
   }
   if(phase==='decorate'){
     if(state.placed.length<2) return {ok:false, msg:'Adaugă cel puțin două toppinguri.'};
+    const have=new Set(state.placed.map(p=>p.id));
+    const missing=state.order.tops.filter(id=>!have.has(id));
+    if(missing.length) return {ok:false, msg:'Mai adaugă toppingurile cerute pe comandă.'};
     return {ok:true};
   }
   if(phase==='bake'){
