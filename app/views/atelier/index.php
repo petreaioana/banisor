@@ -176,6 +176,6 @@
   </div>
 
   <!-- JS minim -->
-  <script src="<?= asset_url('js/atelier.js') ?>?v=<?= (int)filemtime(__DIR__.'/../../../assets/js/atelier.js') ?>"></script>
+  <script src="<?= asset_url('js/atelier.js') ?>?v=<?= md5_file(__DIR__.'/../../../assets/js/atelier.js') ?>"></script>
 </body>
 </html>
