@@ -3,6 +3,17 @@
 declare(strict_types=1);
 session_start();
 require __DIR__ . '/game_assets/lib/jsonfs.php'; 
+require_once __DIR__ . '/database/ensure_schema.php';
+
+// Idle-ul rămâne funcțional și fără MySQL, dar când XAMPP este pornit schema
+// este verificată automat la deschiderea jocului.
+if (($_GET['action'] ?? '') !== 'save') {
+  try {
+    ensure_schema();
+  } catch (Throwable $schemaError) {
+    error_log('Bănișor schema bootstrap: ' . $schemaError->getMessage());
+  }
+}
 
 // 1) Endpoint snapshot din client (salvat pe disc în data/autosim/profile_autosave.json)
 if (isset($_GET['action']) && $_GET['action'] === 'save') {

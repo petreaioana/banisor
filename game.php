@@ -8,7 +8,14 @@
  *  - JS:   game_assets/js/game.js
  *  - IMG:  game_assets/images/*
  */
-?><!DOCTYPE html>
+require_once __DIR__ . '/database/ensure_schema.php';
+try {
+  ensure_schema();
+} catch (Throwable $schemaError) {
+  error_log('Bănișor schema bootstrap: ' . $schemaError->getMessage());
+}
+?>
+<!DOCTYPE html>
 <html lang="ro">
 <head>
   <meta charset="utf-8" />

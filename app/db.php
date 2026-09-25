@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/database/ensure_schema.php';
+
 function app_config(): array
 {
     static $config;
@@ -30,6 +32,10 @@ function pdo(): PDO
     if ($connection instanceof PDO) {
         return $connection;
     }
+
+    // Bootstrap-ul verifică versiunea și creează doar obiectele lipsă.
+    // Se execută o singură migrare pentru fiecare versiune de schemă.
+    ensure_schema();
 
     $cfg = app_config()['db'] ?? [];
     $host = $cfg['host'] ?? 'localhost';
