@@ -1,0 +1,13 @@
+{
+    "qty": 13,
+    "avg_q": 0.88,
+    "buffs": [
+        {
+            "id": "freshBake",
+            "label": "Coacere perfectă",
+            "trafficMult": 1.08,
+            "qBonus": 0.02,
+            "expires": 1790346514
+        }
+    ]
+}
